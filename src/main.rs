@@ -33,26 +33,29 @@ struct Cli {
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let (root, initial_file) = match cli.path {
-        Some(p) if p.is_dir() => (p, None),
+    // `directory_opened` distingue un dossier explicitement demandé (l'explorateur
+    // s'affiche alors par défaut) d'un simple dossier de secours (fichier isolé ou
+    // aucun argument), auquel cas l'explorateur démarre masqué.
+    let (root, initial_file, directory_opened) = match cli.path {
+        Some(p) if p.is_dir() => (p, None, true),
         Some(p) if p.is_file() => {
             let root = p
                 .parent()
                 .map(|p| p.to_path_buf())
                 .unwrap_or_else(|| PathBuf::from("."));
-            (root, Some(p))
+            (root, Some(p), false)
         }
         Some(p) => {
             let root = p
                 .parent()
                 .map(|p| p.to_path_buf())
                 .unwrap_or_else(|| PathBuf::from("."));
-            (root, None)
+            (root, None, false)
         }
-        None => (std::env::current_dir()?, None),
+        None => (std::env::current_dir()?, None, false),
     };
 
-    let mut app = App::new(root, initial_file)?;
+    let mut app = App::new(root, initial_file, directory_opened)?;
 
     install_panic_hook();
     let mut terminal = setup_terminal()?;

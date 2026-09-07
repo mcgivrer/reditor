@@ -5,6 +5,7 @@ use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragra
 use ratatui::Frame;
 
 use crate::app::{App, Focus, PromptKind};
+use crate::menu::{Action, MenuItem};
 use crate::syntax::{self, style_for};
 
 const EXPLORER_WIDTH: u16 = 28;
@@ -100,12 +101,28 @@ fn menu_x_offset(app: &App, index: usize) -> u16 {
         .sum()
 }
 
+/// Ajoute une case à cocher devant les entrées qui basculent la visibilité
+/// d'un panneau, pour refléter leur état actuel dans le menu Affichage.
+fn item_label(app: &App, item: &MenuItem) -> String {
+    match item.action {
+        Some(Action::ToggleExplorer) => {
+            let mark = if app.show_explorer { 'x' } else { ' ' };
+            format!("[{mark}] {}", item.label)
+        }
+        Some(Action::ToggleOutline) => {
+            let mark = if app.show_outline { 'x' } else { ' ' };
+            format!("[{mark}] {}", item.label)
+        }
+        _ => item.label.to_string(),
+    }
+}
+
 fn draw_menu_dropdown(frame: &mut Frame, app: &App, menu_area: Rect, screen: Rect) {
     let menu_def = &app.menu.menus[app.menu.selected_menu];
     let width = menu_def
         .items
         .iter()
-        .map(|it| it.label.chars().count() + it.shortcut.chars().count() + 4)
+        .map(|it| item_label(app, it).chars().count() + it.shortcut.chars().count() + 4)
         .max()
         .unwrap_or(10)
         .max(menu_def.title.chars().count() + 4) as u16
@@ -148,10 +165,11 @@ fn draw_menu_dropdown(frame: &mut Frame, app: &App, menu_area: Rect, screen: Rec
             } else {
                 Style::default()
             };
+            let label = item_label(app, it);
             let pad = (inner.width as usize)
-                .saturating_sub(it.label.chars().count() + it.shortcut.chars().count() + 1);
+                .saturating_sub(label.chars().count() + it.shortcut.chars().count() + 1);
             ListItem::new(Line::from(Span::styled(
-                format!("{}{}{}", it.label, " ".repeat(pad.max(1)), it.shortcut),
+                format!("{}{}{}", label, " ".repeat(pad.max(1)), it.shortcut),
                 style,
             )))
         })

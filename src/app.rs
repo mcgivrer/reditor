@@ -44,14 +44,18 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(root: PathBuf, initial_file: Option<PathBuf>) -> anyhow::Result<Self> {
+    pub fn new(
+        root: PathBuf,
+        initial_file: Option<PathBuf>,
+        directory_opened: bool,
+    ) -> anyhow::Result<Self> {
         let explorer = Explorer::new(root);
         let mut app = App {
             tabs: Vec::new(),
             active_tab: 0,
             explorer,
             focus: Focus::Editor,
-            show_explorer: true,
+            show_explorer: directory_opened,
             show_outline: true,
             outline_selected: 0,
             status_message: None,
