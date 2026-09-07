@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub struct ExplorerEntry {
     pub path: PathBuf,
@@ -120,5 +120,9 @@ impl Explorer {
         if self.selected + 1 < self.entries.len() {
             self.selected += 1;
         }
+    }
+
+    pub fn root(&self) -> &Path {
+        &self.entries[0].path
     }
 }

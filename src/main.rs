@@ -1,6 +1,7 @@
 mod app;
 mod buffer;
 mod explorer;
+mod menu;
 mod outline;
 mod syntax;
 mod ui;

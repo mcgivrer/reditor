@@ -81,6 +81,13 @@ impl Buffer {
         Ok(())
     }
 
+    pub fn save_as(&mut self, path: PathBuf) -> Result<()> {
+        self.language = syntax::detect_language(&path);
+        self.path = Some(path);
+        self.recompute_highlight_states();
+        self.save()
+    }
+
     pub fn recompute_highlight_states(&mut self) {
         let mut states = Vec::with_capacity(self.lines.len());
         let mut state = LineHighlightState::default();
@@ -206,6 +213,36 @@ impl Buffer {
     pub fn goto_line(&mut self, line: usize) {
         self.cursor_line = line.min(self.lines.len().saturating_sub(1));
         self.cursor_col = 0;
+    }
+
+    pub fn current_line(&self) -> &str {
+        &self.lines[self.cursor_line]
+    }
+
+    /// Retire la ligne courante du buffer et la renvoie.
+    pub fn remove_current_line(&mut self) -> String {
+        let content = if self.lines.len() == 1 {
+            std::mem::take(&mut self.lines[0])
+        } else {
+            let removed = self.lines.remove(self.cursor_line);
+            if self.cursor_line >= self.lines.len() {
+                self.cursor_line = self.lines.len() - 1;
+            }
+            removed
+        };
+        self.cursor_col = 0;
+        self.modified = true;
+        self.recompute_highlight_states();
+        content
+    }
+
+    /// Insère `text` comme nouvelle ligne juste après la ligne courante.
+    pub fn insert_line_below(&mut self, text: String) {
+        self.lines.insert(self.cursor_line + 1, text);
+        self.cursor_line += 1;
+        self.cursor_col = 0;
+        self.modified = true;
+        self.recompute_highlight_states();
     }
 
     pub fn ensure_cursor_visible(&mut self, viewport_height: usize, viewport_width: usize) {
