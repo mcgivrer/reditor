@@ -15,6 +15,7 @@ pub enum Action {
     About,
 }
 
+#[derive(Debug)]
 pub struct MenuItem {
     pub label: &'static str,
     pub shortcut: &'static str,
@@ -22,11 +23,13 @@ pub struct MenuItem {
     pub action: Option<Action>,
 }
 
+#[derive(Debug)]
 pub struct MenuDef {
     pub title: &'static str,
     pub items: Vec<MenuItem>,
 }
 
+#[derive(Debug)]
 pub struct MenuBar {
     pub menus: Vec<MenuDef>,
     pub active: bool,

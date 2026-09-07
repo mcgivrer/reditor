@@ -7,13 +7,14 @@ use crate::explorer::Explorer;
 use crate::menu::{Action, MenuBar};
 use crate::outline::{extract_outline, OutlineItem};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Focus {
     Explorer,
     Editor,
     Outline,
 }
 
+#[derive(Debug)]
 pub enum PromptKind {
     SaveAs,
     OpenFile,
@@ -21,12 +22,14 @@ pub enum PromptKind {
     ConfirmQuit,
 }
 
+#[derive(Debug)]
 pub struct Prompt {
     pub kind: PromptKind,
     pub label: String,
     pub input: String,
 }
 
+#[derive(Debug)]
 pub struct App {
     pub tabs: Vec<Buffer>,
     pub active_tab: usize,

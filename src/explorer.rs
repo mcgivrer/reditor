@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+#[derive(Debug)]
 pub struct ExplorerEntry {
     pub path: PathBuf,
     pub depth: usize,
@@ -9,6 +10,7 @@ pub struct ExplorerEntry {
     pub expanded: bool,
 }
 
+#[derive(Debug)]
 pub struct Explorer {
     pub entries: Vec<ExplorerEntry>,
     pub selected: usize,

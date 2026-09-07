@@ -1,11 +1,3 @@
-mod app;
-mod buffer;
-mod explorer;
-mod menu;
-mod outline;
-mod syntax;
-mod ui;
-
 use std::io;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -20,7 +12,8 @@ use crossterm::terminal::{
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
-use app::App;
+use reditor::app::App;
+use reditor::ui;
 
 /// reditor — un éditeur de texte façon IDE, dans le terminal.
 #[derive(Parser)]

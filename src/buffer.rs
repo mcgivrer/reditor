@@ -5,6 +5,7 @@ use anyhow::{Context, Result};
 
 use crate::syntax::{self, Language, LineHighlightState};
 
+#[derive(Debug)]
 pub struct Buffer {
     pub path: Option<PathBuf>,
     pub lines: Vec<String>,
