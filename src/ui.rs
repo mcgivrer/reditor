@@ -64,11 +64,13 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     if app.menu.active {
         draw_menu_dropdown(frame, app, menu_area, size);
     }
+    // `main_area` (jamais la ligne 0) sert de zone d'ancrage pour les popups,
+    // afin que la barre de menu reste toujours visible tout en haut de l'écran.
     if let Some(prompt) = &app.prompt {
-        draw_prompt(frame, prompt, size);
+        draw_prompt(frame, prompt, main_area);
     }
     if app.about_open {
-        draw_about(frame, size);
+        draw_about(frame, main_area);
     }
 }
 
