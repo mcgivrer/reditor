@@ -6,16 +6,7 @@ Un éditeur de texte façon IDE, entièrement dans le terminal.
 fichiers, onglets, panneau de structure du fichier, barre de menu — sans
 quitter le terminal et sans souris.
 
-```
-┌ Fichier  Édition  Affichage  Aide ───────────────────────────────────────┐
-├ Explorateur ──────────┬ [main.rs] [Cargo.toml] ───────────┬ Structure ───┤
-│ ▾ mon-projet           │  1  fn main() {                  │ fn main      │
-│   ▸ src                │  2      println!("bonjour");     │              │
-│     Cargo.toml         │  3  }                              │              │
-├────────────────────────┴────────────────────────────────┴────────────────┤
-│ Rust — main.rs  Ln 1, Col 1        F10 menu  F1 aide  Ctrl+S sauver ...   │
-└────────────────────────────────────────────────────────────────────────────┘
-```
+![Aperçu de reditor](docs/assets/reditor-screenshot.svg)
 
 ## Fonctionnalités
 

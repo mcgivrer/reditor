@@ -1,0 +1,112 @@
+<svg width="840" height="442" viewBox="0 0 840 442" xmlns="http://www.w3.org/2000/svg" font-family="SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace" font-size="15">
+  <title>Aperçu de reditor</title>
+  <defs>
+    <clipPath id="round-frame">
+      <rect x="0" y="0" width="840" height="442" rx="10" ry="10"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#round-frame)">
+    <!-- fonds -->
+    <rect x="0" y="0" width="840" height="442" fill="#161b22"/>
+    <rect x="0" y="28" width="840" height="414" fill="#0d1117"/>
+
+    <!-- barre de titre décorative -->
+    <circle cx="20" cy="14" r="5" fill="#ff5f56"/>
+    <circle cx="40" cy="14" r="5" fill="#ffbd2e"/>
+    <circle cx="60" cy="14" r="5" fill="#27c93f"/>
+    <text x="420" y="18" text-anchor="middle" fill="#8b949e" font-size="12">reditor — main.rs</text>
+    <line x1="0" y1="28" x2="840" y2="28" stroke="#30363d" stroke-width="1"/>
+
+    <!-- fonds des rangées spéciales -->
+    <rect x="0" y="28" width="840" height="18" fill="#3a3f4b"/>
+    <rect x="0" y="424" width="840" height="18" fill="#c8ccd4"/>
+
+    <!-- cadres des trois panneaux -->
+    <rect x="0.75" y="46.75" width="234" height="376.5" fill="none" stroke="#6b7280" stroke-width="1.5"/>
+    <rect x="571.95" y="46.75" width="267.3" height="376.5" fill="none" stroke="#6b7280" stroke-width="1.5"/>
+    <rect x="235.95" y="64.75" width="334.5" height="358.5" fill="none" stroke="#56b6c2" stroke-width="1.5"/>
+
+    <!-- libellés incrustés dans la bordure haute -->
+    <rect x="6" y="38" width="100" height="16" fill="#0d1117"/>
+    <text x="10" y="50" fill="#6b7280">Explorateur</text>
+    <rect x="577.2" y="38" width="86" height="16" fill="#0d1117"/>
+    <text x="581.2" y="50" fill="#6b7280">Structure</text>
+
+    <!-- onglet actif -->
+    <rect x="235.2" y="46" width="67.2" height="18" fill="#56b6c2"/>
+    <!-- entrée sélectionnée dans l'explorateur -->
+    <rect x="8.4" y="100" width="218.4" height="18" fill="#2f81f7"/>
+
+    <!-- barre de menu -->
+    <text x="8.4" y="41" fill="#e6e6e6">Fichier  Édition  Affichage  Aide</text>
+
+    <!-- ligne 1 : onglet -->
+    <text x="235.2" y="59" fill="#0d1117">main.rs</text>
+
+    <!-- ligne 2 -->
+    <text x="8.4" y="77" fill="#56b6c2">▾ reditor</text>
+    <text x="579.6" y="77" fill="#d4d4d4">fn add</text>
+
+    <!-- ligne 3 -->
+    <text x="25.2" y="95" fill="#56b6c2">▾ src</text>
+    <text x="260.4" y="95" fill="#6b7280">1</text>
+    <text x="277.2" y="95" fill="#6b7280" font-style="italic">// Point d'entrée</text>
+    <text x="579.6" y="95" fill="#d4d4d4">struct Point</text>
+
+    <!-- ligne 4 : main.rs sélectionné -->
+    <text x="58.8" y="113" fill="#ffffff">main.rs</text>
+    <text x="260.4" y="113" fill="#6b7280">2</text>
+    <text x="277.2" y="113" fill="#c678dd">use</text>
+    <text x="302.4" y="113" fill="#d4d4d4"> std::collections::</text>
+    <text x="462" y="113" fill="#e5c07b">HashMap</text>
+    <text x="520.8" y="113" fill="#d4d4d4">;</text>
+
+    <!-- ligne 5 -->
+    <text x="58.8" y="131" fill="#d4d4d4">lib.rs</text>
+    <text x="260.4" y="131" fill="#6b7280">3</text>
+
+    <!-- ligne 6 -->
+    <text x="25.2" y="149" fill="#56b6c2">▸ target</text>
+    <text x="260.4" y="149" fill="#6b7280">4</text>
+    <text x="277.2" y="149" fill="#c678dd">fn</text>
+    <text x="302.4" y="149" fill="#61afef">add</text>
+    <text x="327.6" y="149" fill="#d4d4d4">(a: </text>
+    <text x="361.2" y="149" fill="#e5c07b">i32</text>
+    <text x="386.4" y="149" fill="#d4d4d4">, b: </text>
+    <text x="428.4" y="149" fill="#e5c07b">i32</text>
+    <text x="453.6" y="149" fill="#d4d4d4">) -&gt; </text>
+    <text x="495.6" y="149" fill="#e5c07b">i32</text>
+    <text x="520.8" y="149" fill="#d4d4d4"> {</text>
+
+    <!-- ligne 7 -->
+    <text x="42" y="167" fill="#d4d4d4">Cargo.toml</text>
+    <text x="260.4" y="167" fill="#6b7280">5</text>
+    <text x="310.8" y="167" fill="#d4d4d4">a + b</text>
+
+    <!-- ligne 8 -->
+    <text x="42" y="185" fill="#d4d4d4">README.md</text>
+    <text x="260.4" y="185" fill="#6b7280">6</text>
+    <text x="277.2" y="185" fill="#d4d4d4">}</text>
+
+    <!-- ligne 9 -->
+    <text x="260.4" y="203" fill="#6b7280">7</text>
+
+    <!-- ligne 10 -->
+    <text x="260.4" y="221" fill="#6b7280">8</text>
+    <text x="277.2" y="221" fill="#c678dd">struct</text>
+    <text x="327.6" y="221" fill="#d4d4d4"> Point { x: </text>
+    <text x="428.4" y="221" fill="#e5c07b">f64</text>
+    <text x="453.6" y="221" fill="#d4d4d4">, y: </text>
+    <text x="495.6" y="221" fill="#e5c07b">f64</text>
+    <text x="520.8" y="221" fill="#d4d4d4"> }</text>
+
+    <!-- ligne 11 -->
+    <text x="260.4" y="239" fill="#6b7280">9</text>
+
+    <!-- barre de statut -->
+    <text x="8.4" y="437" fill="#1c1f26">Rust — main.rs  Ln 5, Col 1                    F10 menu  F1 aide  Ctrl+S sauver  Ctrl+Q quitter</text>
+  </g>
+
+  <rect x="0.5" y="0.5" width="839" height="441" rx="10" ry="10" fill="none" stroke="#30363d" stroke-width="1"/>
+</svg>
