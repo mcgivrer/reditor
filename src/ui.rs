@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -5,8 +7,17 @@ use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragra
 use ratatui::Frame;
 
 use crate::app::{App, Focus, PromptKind};
+use crate::dialog::{DialogMode, FileDialog};
 use crate::menu::{Action, MenuItem};
 use crate::syntax::{self, style_for};
+
+/// Vrai si `path` correspond à un onglet actuellement ouvert et portant des
+/// modifications non enregistrées (affiché en italique dans l'explorateur).
+fn has_unsaved_changes(app: &App, path: &Path) -> bool {
+    app.tabs
+        .iter()
+        .any(|b| b.modified && b.path.as_deref() == Some(path))
+}
 
 const EXPLORER_WIDTH: u16 = 28;
 const OUTLINE_WIDTH: u16 = 32;
@@ -72,6 +83,9 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     }
     if app.about_open {
         draw_about(frame, main_area);
+    }
+    if let Some(dialog) = &app.file_dialog {
+        draw_file_dialog(frame, dialog, main_area);
     }
 }
 
@@ -236,6 +250,109 @@ fn draw_about(frame: &mut Frame, screen: Rect) {
     frame.render_widget(Paragraph::new(text), inner);
 }
 
+fn draw_file_dialog(frame: &mut Frame, dialog: &FileDialog, screen: Rect) {
+    let width = (screen.width * 3 / 4).clamp(40, 100).min(screen.width);
+    let height = (screen.height * 3 / 4).clamp(10, screen.height);
+    let area = centered_rect(width, height, screen);
+    frame.render_widget(Clear, area);
+
+    let title = match dialog.mode {
+        DialogMode::Open => " Ouvrir un fichier ",
+        DialogMode::SaveAs => " Enregistrer sous ",
+    };
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let show_filename_row = dialog.mode == DialogMode::SaveAs;
+    let mut constraints = vec![Constraint::Min(1), Constraint::Length(1)];
+    if show_filename_row {
+        constraints.insert(1, Constraint::Length(1));
+    }
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(constraints)
+        .split(inner);
+    let tree_area = rows[0];
+    let filename_area = if show_filename_row { Some(rows[1]) } else { None };
+    let hint_area = rows[rows.len() - 1];
+
+    let items: Vec<ListItem> = dialog
+        .browser
+        .entries
+        .iter()
+        .map(|entry| {
+            let indent = "  ".repeat(entry.depth);
+            let icon = if entry.is_dir {
+                if entry.expanded {
+                    "▾ "
+                } else {
+                    "▸ "
+                }
+            } else {
+                "  "
+            };
+            let name = entry
+                .path
+                .file_name()
+                .and_then(|f| f.to_str())
+                .unwrap_or("?");
+            let style = if entry.is_dir {
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            };
+            ListItem::new(Line::from(Span::styled(
+                format!("{indent}{icon}{name}"),
+                style,
+            )))
+        })
+        .collect();
+    let mut state = ListState::default();
+    state.select(Some(dialog.browser.selected));
+    let tree_focused = !dialog.editing_filename;
+    let highlight_style = if tree_focused {
+        Style::default()
+            .bg(Color::Blue)
+            .fg(Color::White)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().add_modifier(Modifier::REVERSED)
+    };
+    let list = List::new(items).highlight_style(highlight_style);
+    frame.render_stateful_widget(list, tree_area, &mut state);
+
+    if let Some(fa) = filename_area {
+        let label_style = if dialog.editing_filename {
+            Style::default().fg(Color::Black).bg(Color::Cyan)
+        } else {
+            Style::default().fg(Color::Cyan)
+        };
+        let text = format!("Nom : {}", dialog.filename);
+        frame.render_widget(Paragraph::new(text).style(label_style), fa);
+        if dialog.editing_filename {
+            let cursor_x = fa.x + 6 + dialog.filename.chars().count() as u16;
+            frame.set_cursor_position((cursor_x.min(fa.x + fa.width.saturating_sub(1)), fa.y));
+        }
+    }
+
+    let hint = match dialog.mode {
+        DialogMode::Open => "↑↓ naviguer   →/Entrée ouvrir ou déplier   ← replier   Échap annuler",
+        DialogMode::SaveAs => {
+            "↑↓ naviguer   →/Entrée déplier/choisir   Tab nom de fichier   Échap annuler"
+        }
+    };
+    frame.render_widget(
+        Paragraph::new(hint).style(Style::default().fg(Color::DarkGray)),
+        hint_area,
+    );
+}
+
 fn draw_explorer(frame: &mut Frame, app: &App, area: Rect) {
     let focused = app.focus == Focus::Explorer;
     let border_style = if focused {
@@ -270,13 +387,16 @@ fn draw_explorer(frame: &mut Frame, app: &App, area: Rect) {
                 .file_name()
                 .and_then(|f| f.to_str())
                 .unwrap_or("?");
-            let style = if entry.is_dir {
+            let mut style = if entry.is_dir {
                 Style::default()
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
             };
+            if !entry.is_dir && has_unsaved_changes(app, &entry.path) {
+                style = style.add_modifier(Modifier::ITALIC);
+            }
             ListItem::new(Line::from(Span::styled(
                 format!("{indent}{icon}{name}"),
                 style,

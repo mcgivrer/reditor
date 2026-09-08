@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -126,5 +127,44 @@ impl Explorer {
 
     pub fn root(&self) -> &Path {
         &self.entries[0].path
+    }
+
+    /// Relit l'arborescence depuis le disque (fichier ajouté, modifié,
+    /// renommé ou supprimé), en conservant autant que possible les dossiers
+    /// dépliés et l'entrée sélectionnée.
+    pub fn refresh(&mut self) {
+        let expanded: HashSet<PathBuf> = self
+            .entries
+            .iter()
+            .filter(|e| e.is_dir && e.expanded)
+            .map(|e| e.path.clone())
+            .collect();
+        let selected_path = self.entries.get(self.selected).map(|e| e.path.clone());
+        let root = self.entries[0].path.clone();
+
+        self.entries = vec![ExplorerEntry {
+            path: root,
+            depth: 0,
+            is_dir: true,
+            expanded: true,
+        }];
+        self.load_children(0);
+
+        let mut i = 0;
+        while i < self.entries.len() {
+            if self.entries[i].is_dir
+                && !self.entries[i].expanded
+                && expanded.contains(&self.entries[i].path)
+            {
+                self.entries[i].expanded = true;
+                self.load_children(i);
+            }
+            i += 1;
+        }
+
+        self.selected = selected_path
+            .and_then(|path| self.entries.iter().position(|e| e.path == path))
+            .unwrap_or(0)
+            .min(self.entries.len().saturating_sub(1));
     }
 }

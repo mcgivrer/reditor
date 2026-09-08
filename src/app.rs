@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::buffer::Buffer;
+use crate::dialog::{DialogMode, FileDialog};
 use crate::explorer::Explorer;
 use crate::menu::{Action, MenuBar};
 use crate::outline::{extract_outline, OutlineItem};
@@ -16,8 +17,6 @@ pub enum Focus {
 
 #[derive(Debug)]
 pub enum PromptKind {
-    SaveAs,
-    OpenFile,
     GoToLine,
     ConfirmQuit,
 }
@@ -43,6 +42,7 @@ pub struct App {
     pub menu: MenuBar,
     pub clipboard: Option<String>,
     pub prompt: Option<Prompt>,
+    pub file_dialog: Option<FileDialog>,
     pub about_open: bool,
 }
 
@@ -66,6 +66,7 @@ impl App {
             menu: MenuBar::new(),
             clipboard: None,
             prompt: None,
+            file_dialog: None,
             about_open: false,
         };
         match initial_file {
@@ -145,7 +146,10 @@ impl App {
     pub fn save_current(&mut self) {
         let name = self.current_buffer().display_name();
         match self.current_buffer_mut().save() {
-            Ok(()) => self.status_message = Some(format!("{name} enregistré")),
+            Ok(()) => {
+                self.status_message = Some(format!("{name} enregistré"));
+                self.explorer.refresh();
+            }
             Err(e) => self.status_message = Some(format!("Erreur : {e}")),
         }
     }
@@ -160,25 +164,27 @@ impl App {
                 self.focus = Focus::Editor;
             }
             Action::OpenFile => {
-                self.prompt = Some(Prompt {
-                    kind: PromptKind::OpenFile,
-                    label: "Ouvrir un fichier :".to_string(),
-                    input: String::new(),
-                });
+                self.file_dialog = Some(FileDialog::new(
+                    DialogMode::Open,
+                    self.explorer.root().to_path_buf(),
+                    String::new(),
+                ));
             }
             Action::Save => self.save_current(),
             Action::SaveAs => {
-                let default = self
+                let default_name = self
                     .current_buffer()
                     .path
                     .as_ref()
-                    .map(|p| p.display().to_string())
-                    .unwrap_or_default();
-                self.prompt = Some(Prompt {
-                    kind: PromptKind::SaveAs,
-                    label: "Enregistrer sous :".to_string(),
-                    input: default,
-                });
+                    .and_then(|p| p.file_name())
+                    .and_then(|n| n.to_str())
+                    .map(str::to_string)
+                    .unwrap_or_else(|| "sans-titre.txt".to_string());
+                self.file_dialog = Some(FileDialog::new(
+                    DialogMode::SaveAs,
+                    self.explorer.root().to_path_buf(),
+                    default_name,
+                ));
             }
             Action::CloseTab => self.close_tab(self.active_tab),
             Action::Quit => {
@@ -227,6 +233,11 @@ impl App {
             return;
         }
 
+        if self.file_dialog.is_some() {
+            self.handle_file_dialog_key(key);
+            return;
+        }
+
         if self.prompt.is_some() {
             self.handle_prompt_key(key);
             return;
@@ -262,7 +273,10 @@ impl App {
                 KeyCode::Char('v') => self.execute_action(Action::PasteLine),
                 KeyCode::Right => self.next_tab(),
                 KeyCode::Left => self.prev_tab(),
-                KeyCode::Char('e') => self.focus = Focus::Explorer,
+                KeyCode::Char('e') => {
+                    self.explorer.refresh();
+                    self.focus = Focus::Explorer;
+                }
                 KeyCode::Char('l') => self.focus = Focus::Outline,
                 _ => {}
             }
@@ -273,6 +287,7 @@ impl App {
 
         match key.code {
             KeyCode::F(2) => {
+                self.explorer.refresh();
                 self.focus = Focus::Explorer;
                 return;
             }
@@ -344,37 +359,106 @@ impl App {
             return;
         };
         match prompt.kind {
-            PromptKind::SaveAs => {
-                let trimmed = prompt.input.trim();
-                if trimmed.is_empty() {
-                    self.status_message = Some("Chemin vide, enregistrement annulé".to_string());
-                    return;
-                }
-                let path = PathBuf::from(trimmed);
-                match self.current_buffer_mut().save_as(path) {
-                    Ok(()) => self.status_message = Some("Fichier enregistré".to_string()),
-                    Err(e) => self.status_message = Some(format!("Erreur : {e}")),
-                }
-            }
-            PromptKind::OpenFile => {
-                let trimmed = prompt.input.trim();
-                if trimmed.is_empty() {
-                    return;
-                }
-                let mut path = PathBuf::from(trimmed);
-                if path.is_relative() {
-                    path = self.explorer.root().join(path);
-                }
-                if let Err(e) = self.open_file(path) {
-                    self.status_message = Some(format!("Erreur : {e}"));
-                }
-            }
             PromptKind::GoToLine => match prompt.input.trim().parse::<usize>() {
                 Ok(n) if n >= 1 => self.current_buffer_mut().goto_line(n - 1),
                 _ => self.status_message = Some("Numéro de ligne invalide".to_string()),
             },
             PromptKind::ConfirmQuit => {}
         }
+    }
+
+    fn handle_file_dialog_key(&mut self, key: KeyEvent) {
+        let editing_filename = self
+            .file_dialog
+            .as_ref()
+            .is_some_and(|d| d.editing_filename);
+        match key.code {
+            KeyCode::Esc => self.file_dialog = None,
+            KeyCode::Tab => {
+                if let Some(d) = self.file_dialog.as_mut() {
+                    d.toggle_filename_focus();
+                }
+            }
+            KeyCode::Up | KeyCode::Char('k') if !editing_filename => {
+                if let Some(d) = self.file_dialog.as_mut() {
+                    d.browser.move_up();
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') if !editing_filename => {
+                if let Some(d) = self.file_dialog.as_mut() {
+                    d.browser.move_down();
+                }
+            }
+            KeyCode::Left | KeyCode::Char('h') if !editing_filename => {
+                if let Some(d) = self.file_dialog.as_mut() {
+                    d.browser.collapse_selected();
+                }
+            }
+            KeyCode::Right | KeyCode::Char('l') if !editing_filename => {
+                self.activate_dialog_selection();
+            }
+            KeyCode::Enter => self.confirm_file_dialog(),
+            KeyCode::Backspace if editing_filename => {
+                if let Some(d) = self.file_dialog.as_mut() {
+                    d.filename.pop();
+                }
+            }
+            KeyCode::Char(c) if editing_filename => {
+                if let Some(d) = self.file_dialog.as_mut() {
+                    d.filename.push(c);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Active l'entrée sélectionnée du dialogue : déplie/replie un dossier,
+    /// ouvre un fichier (mode Ouvrir), ou pré-remplit le nom (mode
+    /// Enregistrer sous).
+    fn activate_dialog_selection(&mut self) {
+        let Some(dialog) = self.file_dialog.as_mut() else {
+            return;
+        };
+        let Some(path) = dialog.browser.activate_selected() else {
+            // C'était un dossier : déjà déplié/replié, rien de plus à faire.
+            return;
+        };
+        match dialog.mode {
+            DialogMode::Open => {
+                self.file_dialog = None;
+                if let Err(e) = self.open_file(path) {
+                    self.status_message = Some(format!("Erreur : {e}"));
+                }
+            }
+            DialogMode::SaveAs => {
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    dialog.filename = name.to_string();
+                }
+            }
+        }
+    }
+
+    fn confirm_file_dialog(&mut self) {
+        let Some(dialog) = self.file_dialog.as_ref() else {
+            return;
+        };
+        if dialog.mode == DialogMode::SaveAs && dialog.editing_filename {
+            if dialog.filename.trim().is_empty() {
+                self.status_message = Some("Nom de fichier vide, enregistrement annulé".to_string());
+                return;
+            }
+            let path = dialog.save_path();
+            self.file_dialog = None;
+            match self.current_buffer_mut().save_as(path) {
+                Ok(()) => {
+                    self.status_message = Some("Fichier enregistré".to_string());
+                    self.explorer.refresh();
+                }
+                Err(e) => self.status_message = Some(format!("Erreur : {e}")),
+            }
+            return;
+        }
+        self.activate_dialog_selection();
     }
 
     fn handle_explorer_key(&mut self, key: KeyEvent) {

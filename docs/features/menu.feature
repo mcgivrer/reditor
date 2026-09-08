@@ -27,7 +27,7 @@ Fonctionnalité: Barre de menu
     Et j'appuie sur "Entrée"
     Alors le nombre d'onglets ouverts est 2
 
-  Scénario: Enregistrer sous depuis le menu renomme l'onglet
+  Scénario: Enregistrer sous depuis le menu propose un dialogue de sélection
     Étant donné un nouvel onglet vide
     Quand je tape "class Demo {}"
     Et j'appuie sur "F10"
@@ -35,10 +35,28 @@ Fonctionnalité: Barre de menu
     Et j'appuie sur "Bas"
     Et j'appuie sur "Bas"
     Et j'appuie sur "Entrée"
-    Alors une invite "Enregistrer sous :" est affichée
-    Quand je valide l'invite avec "demo.java"
-    Alors le nom de l'onglet actif est "demo.java"
+    Alors une fenêtre de dialogue "Enregistrer sous" est affichée
+    Quand je saisis le nom de fichier "demo.java" dans le dialogue
+    Et je confirme le dialogue de fichier
+    Alors aucune fenêtre de dialogue n'est affichée
+    Et le nom de l'onglet actif est "demo.java"
     Et le langage détecté est "Java"
+
+  Scénario: Ouvrir un fichier depuis le menu propose un dialogue de sélection
+    Étant donné un fichier "notes.txt" contenant "un secret bien gardé"
+    Quand j'appuie sur "Ctrl+O"
+    Alors une fenêtre de dialogue "Ouvrir" est affichée
+    Quand je choisis "notes.txt" dans le dialogue de fichier
+    Alors aucune fenêtre de dialogue n'est affichée
+    Et la ligne 1 de l'éditeur contient "un secret bien gardé"
+
+  Scénario: Échap referme le dialogue de fichier sans rien changer
+    Étant donné un nouvel onglet vide
+    Quand j'appuie sur "Ctrl+O"
+    Alors une fenêtre de dialogue "Ouvrir" est affichée
+    Quand j'appuie sur "Échap"
+    Alors aucune fenêtre de dialogue n'est affichée
+    Et le nombre d'onglets ouverts est 1
 
   Scénario: Quitter sans modification ne demande pas de confirmation
     Étant donné un nouvel onglet vide

@@ -10,7 +10,8 @@ use cucumber::{given, then, when, World};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tempfile::TempDir;
 
-use reditor::app::{App, PromptKind};
+use reditor::app::App;
+use reditor::dialog::DialogMode;
 
 #[derive(Debug, World)]
 #[world(init = Self::fresh)]
@@ -140,23 +141,84 @@ fn when_press_key(world: &mut ReditorWorld, combo: String) {
 
 #[when(regex = r#"^je valide l'invite avec "([^"]*)"$"#)]
 fn when_confirm_prompt(world: &mut ReditorWorld, input: String) {
-    // Pour « Enregistrer sous » / « Ouvrir », un nom de fichier simple est
-    // résolu dans le dossier temporaire isolé du scénario, afin de ne jamais
-    // écrire en dehors de celui-ci (et donc jamais dans le dépôt du projet).
-    let resolves_to_workdir = matches!(
-        world.app.prompt.as_ref().map(|p| &p.kind),
-        Some(PromptKind::SaveAs | PromptKind::OpenFile)
-    );
-    let input = if resolves_to_workdir && !PathBuf::from(&input).is_absolute() {
-        world.path_for(&input).display().to_string()
-    } else {
-        input
-    };
     for c in input.chars() {
         world
             .app
             .handle_key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE));
     }
+    world.app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+}
+
+// ---------------------------------------------------------------------
+// Dialogue de sélection de fichier (Ouvrir / Enregistrer sous)
+// ---------------------------------------------------------------------
+
+#[then(regex = r#"^une fenêtre de dialogue "([^"]+)" est affichée$"#)]
+fn then_dialog_shown(world: &mut ReditorWorld, mode_label: String) {
+    let dialog = world
+        .app
+        .file_dialog
+        .as_ref()
+        .expect("aucune fenêtre de dialogue affichée");
+    let expected = match mode_label.as_str() {
+        "Ouvrir" => DialogMode::Open,
+        "Enregistrer sous" => DialogMode::SaveAs,
+        other => panic!("mode de dialogue inconnu : {other}"),
+    };
+    assert_eq!(dialog.mode, expected);
+}
+
+#[then("aucune fenêtre de dialogue n'est affichée")]
+fn then_no_dialog(world: &mut ReditorWorld) {
+    assert!(world.app.file_dialog.is_none());
+}
+
+/// Descend dans l'arborescence du dialogue jusqu'à sélectionner l'entrée
+/// nommée `name`, puis l'active (ouvre le fichier, ou déplie le dossier).
+#[when(regex = r#"^je choisis "([^"]+)" dans le dialogue de fichier$"#)]
+fn when_pick_in_dialog(world: &mut ReditorWorld, name: String) {
+    let max = world
+        .app
+        .file_dialog
+        .as_ref()
+        .map(|d| d.browser.entries.len())
+        .unwrap_or(0);
+    for _ in 0..max {
+        let current = world.app.file_dialog.as_ref().and_then(|d| {
+            d.browser
+                .entries
+                .get(d.browser.selected)
+                .and_then(|e| e.path.file_name())
+                .and_then(|n| n.to_str())
+                .map(str::to_string)
+        });
+        if current.as_deref() == Some(name.as_str()) {
+            break;
+        }
+        world
+            .app
+            .handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    }
+    world.app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+}
+
+#[when(regex = r#"^je saisis le nom de fichier "([^"]*)" dans le dialogue$"#)]
+fn when_type_dialog_filename(world: &mut ReditorWorld, name: String) {
+    world
+        .app
+        .handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    if let Some(d) = world.app.file_dialog.as_mut() {
+        d.filename.clear();
+    }
+    for c in name.chars() {
+        world
+            .app
+            .handle_key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE));
+    }
+}
+
+#[when("je confirme le dialogue de fichier")]
+fn when_confirm_file_dialog(world: &mut ReditorWorld) {
     world.app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 }
 
@@ -267,6 +329,47 @@ fn then_panel_visibility(world: &mut ReditorWorld, panel: String, state: String)
         "Structure" => assert_eq!(world.app.show_outline, visible),
         other => panic!("panneau inconnu : {other}"),
     }
+}
+
+// ---------------------------------------------------------------------
+// Rafraîchissement de l'explorateur
+// ---------------------------------------------------------------------
+
+#[when(regex = r#"^j'ajoute le fichier "([^"]+)" directement sur le disque$"#)]
+fn when_add_file_on_disk(world: &mut ReditorWorld, name: String) {
+    fs::write(world.path_for(&name), "contenu ajouté en externe")
+        .expect("écriture du fichier de test");
+}
+
+#[when(regex = r#"^je supprime le fichier "([^"]+)" directement sur le disque$"#)]
+fn when_remove_file_on_disk(world: &mut ReditorWorld, name: String) {
+    fs::remove_file(world.path_for(&name)).expect("suppression du fichier de test");
+}
+
+#[when(regex = r#"^je renomme le fichier "([^"]+)" en "([^"]+)" directement sur le disque$"#)]
+fn when_rename_file_on_disk(world: &mut ReditorWorld, from: String, to: String) {
+    fs::rename(world.path_for(&from), world.path_for(&to)).expect("renommage du fichier de test");
+}
+
+#[when("je rafraîchis l'explorateur")]
+fn when_refresh_explorer(world: &mut ReditorWorld) {
+    world.app.explorer.refresh();
+}
+
+#[then(regex = r#"^l'explorateur contient l'entrée "([^"]+)"$"#)]
+fn then_explorer_contains(world: &mut ReditorWorld, name: String) {
+    let found = world.app.explorer.entries.iter().any(|e| {
+        e.path.file_name().and_then(|n| n.to_str()) == Some(name.as_str())
+    });
+    assert!(found, "entrée {name:?} absente de l'explorateur");
+}
+
+#[then(regex = r#"^l'explorateur ne contient pas l'entrée "([^"]+)"$"#)]
+fn then_explorer_not_contains(world: &mut ReditorWorld, name: String) {
+    let found = world.app.explorer.entries.iter().any(|e| {
+        e.path.file_name().and_then(|n| n.to_str()) == Some(name.as_str())
+    });
+    assert!(!found, "entrée {name:?} présente alors qu'elle ne devrait pas l'être");
 }
 
 // ---------------------------------------------------------------------
