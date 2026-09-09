@@ -68,6 +68,8 @@ fn parse_key(combo: &str) -> KeyEvent {
         "F2" => KeyCode::F(2),
         "F3" => KeyCode::F(3),
         "F4" => KeyCode::F(4),
+        "F5" => KeyCode::F(5),
+        "F6" => KeyCode::F(6),
         "F10" => KeyCode::F(10),
         other if other.chars().count() == 1 => {
             let c = other.chars().next().unwrap();
@@ -395,6 +397,60 @@ fn then_outline_contains(world: &mut ReditorWorld, title: String) {
 fn then_outline_not_contains(world: &mut ReditorWorld, title: String) {
     let items = world.app.current_outline();
     assert!(!items.iter().any(|item| item.title == title));
+}
+
+// ---------------------------------------------------------------------
+// Compilation
+// ---------------------------------------------------------------------
+
+#[then(regex = r#"^le menu "([^"]+)" est présent$"#)]
+fn then_menu_present(world: &mut ReditorWorld, title: String) {
+    assert!(
+        world.app.menu.menus.iter().any(|m| m.title == title),
+        "menu {title:?} absent"
+    );
+}
+
+#[then(regex = r#"^le menu "([^"]+)" est absent$"#)]
+fn then_menu_absent(world: &mut ReditorWorld, title: String) {
+    assert!(
+        !world.app.menu.menus.iter().any(|m| m.title == title),
+        "menu {title:?} présent alors qu'il ne devrait pas l'être"
+    );
+}
+
+#[then("une fenêtre de configuration de compilation est affichée")]
+fn then_compile_dialog_shown(world: &mut ReditorWorld) {
+    assert!(world.app.compile_dialog.is_some(), "aucune fenêtre de configuration affichée");
+}
+
+#[then("aucune fenêtre de configuration de compilation n'est affichée")]
+fn then_no_compile_dialog(world: &mut ReditorWorld) {
+    assert!(world.app.compile_dialog.is_none());
+}
+
+#[when("je sélectionne le premier JDK détecté dans le dialogue de compilation")]
+fn when_select_first_jdk(world: &mut ReditorWorld) {
+    world.app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+}
+
+#[then(regex = r#"^le message de statut contient "([^"]+)"$"#)]
+fn then_status_message_contains(world: &mut ReditorWorld, expected: String) {
+    let message = world.app.status_message.clone().unwrap_or_default();
+    assert!(
+        message.contains(&expected),
+        "le message de statut {message:?} ne contient pas {expected:?}"
+    );
+}
+
+#[then(regex = r#"^une fenêtre de résultat de compilation "(réussie|échouée)" est affichée$"#)]
+fn then_compile_result_shown(world: &mut ReditorWorld, expected: String) {
+    let outcome = world
+        .app
+        .compile_result
+        .as_ref()
+        .expect("aucune fenêtre de résultat de compilation affichée");
+    assert_eq!(outcome.success, expected == "réussie");
 }
 
 #[tokio::main]

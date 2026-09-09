@@ -3,11 +3,12 @@ use std::path::Path;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Tabs};
+use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Tabs, Wrap};
 use ratatui::Frame;
 
 use crate::app::{App, Focus, PromptKind};
-use crate::dialog::{DialogMode, FileDialog};
+use crate::compile::CompileOutcome;
+use crate::dialog::{CompileDialog, DialogMode, FileDialog};
 use crate::menu::{Action, MenuItem};
 use crate::syntax::{self, style_for};
 
@@ -86,6 +87,12 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     }
     if let Some(dialog) = &app.file_dialog {
         draw_file_dialog(frame, dialog, main_area);
+    }
+    if let Some(dialog) = &app.compile_dialog {
+        draw_compile_dialog(frame, dialog, main_area);
+    }
+    if let Some(outcome) = &app.compile_result {
+        draw_compile_result(frame, outcome, main_area);
     }
 }
 
@@ -350,6 +357,85 @@ fn draw_file_dialog(frame: &mut Frame, dialog: &FileDialog, screen: Rect) {
     frame.render_widget(
         Paragraph::new(hint).style(Style::default().fg(Color::DarkGray)),
         hint_area,
+    );
+}
+
+fn draw_compile_dialog(frame: &mut Frame, dialog: &CompileDialog, screen: Rect) {
+    let width = 64u16.min(screen.width);
+    let height = (dialog.jdks.len().max(1) as u16 + 4).min(screen.height);
+    let area = centered_rect(width, height, screen);
+    frame.render_widget(Clear, area);
+    let block = Block::default()
+        .title(" Configurer la compilation (Java) ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(1), Constraint::Length(1)])
+        .split(inner);
+    let list_area = rows[0];
+    let hint_area = rows[1];
+
+    if dialog.jdks.is_empty() {
+        let msg = Paragraph::new("Aucun JDK détecté (sdkman, JAVA_HOME, PATH)")
+            .style(Style::default().fg(Color::DarkGray));
+        frame.render_widget(msg, list_area);
+    } else {
+        let items: Vec<ListItem> = dialog
+            .jdks
+            .iter()
+            .map(|jdk| ListItem::new(Line::from(format!("{}  ({})", jdk.label, jdk.javac.display()))))
+            .collect();
+        let mut state = ListState::default();
+        state.select(Some(dialog.selected));
+        let list = List::new(items).highlight_style(
+            Style::default().bg(Color::Blue).fg(Color::White).add_modifier(Modifier::BOLD),
+        );
+        frame.render_stateful_widget(list, list_area, &mut state);
+    }
+
+    frame.render_widget(
+        Paragraph::new("↑↓ choisir   Entrée valider   Échap annuler")
+            .style(Style::default().fg(Color::DarkGray)),
+        hint_area,
+    );
+}
+
+fn draw_compile_result(frame: &mut Frame, outcome: &CompileOutcome, screen: Rect) {
+    let title = if outcome.success {
+        " Compilation réussie "
+    } else {
+        " Échec de la compilation "
+    };
+    let width = (screen.width * 3 / 4).clamp(40, 100).min(screen.width);
+    let height = (screen.height * 2 / 3).clamp(6, screen.height);
+    let area = centered_rect(width, height, screen);
+    frame.render_widget(Clear, area);
+    let border_color = if outcome.success { Color::Green } else { Color::Red };
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(border_color));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(1), Constraint::Length(1)])
+        .split(inner);
+
+    let text = if outcome.output.trim().is_empty() {
+        "(aucune sortie)".to_string()
+    } else {
+        outcome.output.clone()
+    };
+    frame.render_widget(Paragraph::new(text).wrap(Wrap { trim: false }), rows[0]);
+    frame.render_widget(
+        Paragraph::new("Échap ou Entrée pour fermer").style(Style::default().fg(Color::DarkGray)),
+        rows[1],
     );
 }
 

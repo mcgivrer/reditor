@@ -64,6 +64,7 @@ flowchart TB
     menu["menu.rs<br/>MenuBar, Action<br/>définition de la barre de menu"]
     outline["outline.rs<br/>extraction des symboles par langage"]
     syntax["syntax/<br/>détection de langage & coloration"]
+    compile["compile.rs<br/>CompilationModule, JavaModule<br/>détection de JDK & compilation"]
     ui["ui.rs<br/>rendu ratatui (layout, panneaux, popups)"]
 
     main --> lib
@@ -73,6 +74,7 @@ flowchart TB
     app --> explorer
     app --> menu
     app --> outline
+    app --> compile
     ui --> app
     ui --> syntax
     buffer --> syntax
@@ -90,6 +92,7 @@ src/
 ├── explorer.rs     # Explorer : arborescence de fichiers
 ├── menu.rs         # MenuBar, MenuDef, MenuItem, Action
 ├── outline.rs      # extraction de la structure (panneau Structure)
+├── compile.rs      # CompilationModule, JavaModule, détection de JDK
 ├── syntax/
 │   ├── mod.rs      # Language, détection, dispatch, TokenKind, styles
 │   ├── rules.rs    # tables de mots-clés par langage (config déclarative)
@@ -175,12 +178,37 @@ lexicales simples ligne par ligne (préfixes de mots-clés, indentation) —
 suffisant pour un panneau de navigation, sans nécessiter un analyseur
 syntaxique complet.
 
-### 4.6 `syntax/` — Détection de langage et coloration
+### 4.6 `compile.rs` — Compilation de projet
+
+Le trait `CompilationModule` (méthodes `name`, `detect(root)`,
+`compile(root, jdk)`) découple la logique de compilation du reste de
+l'application : `App` ne connaît que ce contrat, jamais un langage
+particulier. `JavaModule` en est l'unique implémentation à ce jour : sa
+détection parcourt récursivement le dossier ouvert à la recherche d'un
+fichier `*.java` (indépendamment de ce que `Explorer` a chargé/déplié, qui
+peut être partiel), et sa compilation invoque `javac` (`std::process::
+Command`) sur tous les fichiers trouvés.
+
+`detect_jdks()` recense les JDK disponibles, dans cet ordre de priorité :
+candidats [sdkman](https://sdkman.io/) (`~/.sdkman/candidates/java/*`,
+l'alias `current` étant ignoré pour éviter un doublon), `JAVA_HOME`, puis
+un `javac` trouvable dans le `PATH` — avec déduplication par chemin
+canonique. Les fonctions de détection élémentaires (`javac_path`,
+`sdkman_jdks`, `path_javac`) sont pures (prennent leurs chemins en
+paramètre plutôt que de lire l'environnement directement), ce qui les rend
+testables sans dépendre de l'état réel du système (voir `compile::tests`).
+
+`App` ne conserve qu'un JDK sélectionné (`Option<Jdk>`, choisi via le
+dialogue de configuration ou, à défaut, le premier JDK détecté au moment de
+compiler) ; le module de compilation lui-même est redétecté à la demande
+plutôt que mémorisé, son coût étant négligeable à l'échelle d'un projet.
+
+### 4.7 `syntax/` — Détection de langage et coloration
 
 Voir §5 (section dédiée, le moteur de coloration étant la partie la plus
 substantielle du projet).
 
-### 4.7 `ui.rs` — Rendu
+### 4.8 `ui.rs` — Rendu
 
 Toute la fonction de rendu (`ui::draw(frame, app)`) est **pure vis-à-vis de
 l'état** : à chaque frame, elle relit l'état courant de `App` et redessine
@@ -373,7 +401,7 @@ Chaque scénario dispose d'un dossier temporaire isolé (`tempfile::tempdir`),
 détruit à la fin du scénario, pour ne jamais interférer avec le dépôt du
 projet ni les autres scénarios. Exécution : `cargo test --test features`.
 
-État actuel : 5 fichiers `.feature`, 34 scénarios, 122 étapes, tous
+État actuel : 7 fichiers `.feature`, 47 scénarios, 195 étapes, tous
 passants.
 
 ## 9. Limitations connues et dette technique
@@ -390,6 +418,14 @@ passants.
 - Aucun test automatisé ne couvre le rendu visuel réel (uniquement testé
   manuellement) ; un futur chantier pourrait introduire une suite
   end-to-end ciblée (§8.2) pour quelques invariants visuels critiques.
+- La détection Java (`compile::find_java_files`) parcourt tout le dossier
+  ouvert à chaque appel, sans tenir compte des dossiers déjà chargés par
+  `Explorer` ni en ignorer aucun (`.git`, `target`, etc.) ; sans impact
+  perceptible sur des projets de taille usuelle, ce parcours pourrait
+  devenir coûteux sur une arborescence très volumineuse.
+- Le module Java invoque directement `javac` sur les fichiers trouvés,
+  sans détecter ni déléguer à un outil de build existant (Maven, Gradle)
+  si le projet en utilise un.
 
 ## 10. Pistes d'évolution
 

@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use crate::compile::Jdk;
 use crate::explorer::Explorer;
 
 /// Ce que le dialogue de fichier doit accomplir une fois validé.
@@ -57,6 +58,38 @@ impl FileDialog {
     pub fn toggle_filename_focus(&mut self) {
         if self.mode == DialogMode::SaveAs {
             self.editing_filename = !self.editing_filename;
+        }
+    }
+}
+
+/// Dialogue modal de configuration de la compilation : liste les JDK
+/// détectés automatiquement (sdkman, `JAVA_HOME`, `PATH`) et permet d'en
+/// choisir un pour le module de compilation détecté (Java, actuellement le
+/// seul module implémenté).
+#[derive(Debug)]
+pub struct CompileDialog {
+    pub jdks: Vec<Jdk>,
+    pub selected: usize,
+}
+
+impl CompileDialog {
+    pub fn new(jdks: Vec<Jdk>) -> Self {
+        CompileDialog { jdks, selected: 0 }
+    }
+
+    pub fn selected_jdk(&self) -> Option<&Jdk> {
+        self.jdks.get(self.selected)
+    }
+
+    pub fn move_up(&mut self) {
+        if self.selected > 0 {
+            self.selected -= 1;
+        }
+    }
+
+    pub fn move_down(&mut self) {
+        if self.selected + 1 < self.jdks.len() {
+            self.selected += 1;
         }
     }
 }

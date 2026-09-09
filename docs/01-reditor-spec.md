@@ -73,6 +73,8 @@ Une barre de menu façon logiciel de bureau, activable par **F10** :
 | Édition | Aller à la ligne... | Ctrl+G | Ouvre une invite pour saisir un numéro de ligne |
 | Affichage | Explorateur | Ctrl+B | Bascule l'affichage du panneau Explorateur (case à cocher reflétant l'état) |
 | Affichage | Structure | — | Bascule l'affichage du panneau Structure (case à cocher reflétant l'état) |
+| Compiler *(si projet compilable)* | Compiler le projet | F5 | Compile le projet avec le JDK sélectionné |
+| Compiler *(si projet compilable)* | Configurer les JDK... | F6 | Ouvre le dialogue de sélection du JDK à utiliser |
 | Aide | À propos | F1 | Affiche une fenêtre de rappel des raccourcis |
 
 Navigation dans le menu : flèches gauche/droite pour changer de menu,
@@ -168,6 +170,28 @@ Affiche en permanence : le langage détecté, le nom du fichier actif (et son
 contextuelle sur les raccourcis principaux, soit le dernier message
 d'information ou d'erreur (par exemple une confirmation de sauvegarde).
 
+### 3.8 Compilation
+
+Le dossier ouvert est analysé au démarrage par une série de **modules de
+compilation**, chacun spécifique à un type de projet. Un premier module
+prend en charge **Java** : il détecte le projet dès qu'un fichier `*.java`
+existe n'importe où dans l'arborescence.
+
+- Le menu **Compiler** (et ses raccourcis F5/F6) n'apparaît que si un
+  module de compilation a détecté le projet ouvert ; il est totalement
+  absent dans le cas contraire.
+- **Configurer les JDK... (F6)** ouvre un dialogue listant les JDK détectés
+  automatiquement, dans cet ordre de priorité : les candidats gérés par
+  [sdkman](https://sdkman.io/) (`~/.sdkman/candidates/java`), la variable
+  d'environnement `JAVA_HOME`, puis un exécutable `javac` trouvable dans le
+  `PATH`. Un même JDK détecté par plusieurs sources n'apparaît qu'une fois.
+  Si aucun JDK n'est trouvé, le dialogue l'indique explicitement. ↑/↓ pour
+  choisir, Entrée pour valider, Échap pour annuler.
+- **Compiler le projet (F5)** compile le projet avec le JDK sélectionné (ou,
+  à défaut de sélection explicite, le premier JDK détecté). Le résultat
+  (succès ou détail de l'échec, sortie de `javac`) s'affiche dans une
+  fenêtre dédiée, sans quitter `reditor`.
+
 ## 4. Raccourcis clavier — récapitulatif
 
 | Raccourci | Action |
@@ -177,6 +201,8 @@ d'information ou d'erreur (par exemple une confirmation de sauvegarde).
 | F2 | Donner le focus à l'explorateur |
 | F3 | Donner le focus à l'éditeur |
 | F4 | Donner le focus à la structure |
+| F5 | Compiler le projet *(si un module de compilation a détecté le projet)* |
+| F6 | Configurer les JDK utilisés pour la compilation *(idem)* |
 | Ctrl+N | Nouveau fichier |
 | Ctrl+O | Ouvrir un fichier (invite de saisie du chemin) |
 | Ctrl+S | Enregistrer |
@@ -220,6 +246,9 @@ d'information ou d'erreur (par exemple une confirmation de sauvegarde).
   guillemets en Bash).
 - L'explorateur ne permet pas de créer, renommer ou supprimer des
   fichiers/dossiers ; il ne sert qu'à naviguer et ouvrir.
+- Seul un module de compilation Java (`javac`) est fourni ; aucun outil de
+  build (Maven, Gradle) n'est détecté ni invoqué, et aucun autre langage
+  n'est pris en charge.
 
 ## 7. Références
 
@@ -232,6 +261,7 @@ via `cargo test --test features` :
 - `affichage.feature` — visibilité des panneaux
 - `coloration_syntaxique.feature` — détection du langage par extension
 - `structure.feature` — extraction des symboles du panneau Structure
+- `compilation.feature` — détection du module Java et compilation du projet
 
 Pour le détail de l'architecture et des choix d'implémentation, voir
 [`02-reditor-dat.md`](02-reditor-dat.md).

@@ -1,5 +1,6 @@
 pub mod app;
 pub mod buffer;
+pub mod compile;
 pub mod dialog;
 pub mod explorer;
 pub mod menu;

@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::buffer::Buffer;
-use crate::dialog::{DialogMode, FileDialog};
+use crate::compile::{self, CompileOutcome, Jdk};
+use crate::dialog::{CompileDialog, DialogMode, FileDialog};
 use crate::explorer::Explorer;
 use crate::menu::{Action, MenuBar};
 use crate::outline::{extract_outline, OutlineItem};
@@ -44,6 +45,13 @@ pub struct App {
     pub prompt: Option<Prompt>,
     pub file_dialog: Option<FileDialog>,
     pub about_open: bool,
+    /// Vrai si le projet ouvert contient au moins un module de compilation
+    /// détectable (voir `compile::detect_module`) ; conditionne la présence
+    /// du menu et des raccourcis « Compiler ».
+    pub compilable: bool,
+    pub compile_dialog: Option<CompileDialog>,
+    pub selected_jdk: Option<Jdk>,
+    pub compile_result: Option<CompileOutcome>,
 }
 
 impl App {
@@ -53,6 +61,7 @@ impl App {
         directory_opened: bool,
     ) -> anyhow::Result<Self> {
         let explorer = Explorer::new(root);
+        let compilable = compile::detect_module(explorer.root()).is_some();
         let mut app = App {
             tabs: Vec::new(),
             active_tab: 0,
@@ -63,11 +72,15 @@ impl App {
             outline_selected: 0,
             status_message: None,
             should_quit: false,
-            menu: MenuBar::new(),
+            menu: MenuBar::new(compilable),
             clipboard: None,
             prompt: None,
             file_dialog: None,
             about_open: false,
+            compilable,
+            compile_dialog: None,
+            selected_jdk: None,
+            compile_result: None,
         };
         match initial_file {
             Some(path) if path.is_file() => app.open_file(path)?,
@@ -221,8 +234,39 @@ impl App {
             }
             Action::ToggleExplorer => self.show_explorer = !self.show_explorer,
             Action::ToggleOutline => self.show_outline = !self.show_outline,
+            Action::Compile => self.compile_project(),
+            Action::ConfigureCompilation => {
+                self.compile_dialog = Some(CompileDialog::new(compile::detect_jdks()));
+            }
             Action::About => self.about_open = true,
         }
+    }
+
+    /// Compile le projet ouvert avec le JDK déjà sélectionné (voir
+    /// `Action::ConfigureCompilation`), ou avec le premier JDK détecté
+    /// automatiquement si aucun n'a encore été choisi durant la session.
+    fn compile_project(&mut self) {
+        let Some(module) = compile::detect_module(self.explorer.root()) else {
+            self.status_message =
+                Some("Aucun module de compilation détecté pour ce projet".to_string());
+            return;
+        };
+        let jdk = match self.selected_jdk.clone().or_else(|| compile::detect_jdks().into_iter().next()) {
+            Some(jdk) => jdk,
+            None => {
+                self.status_message =
+                    Some("Aucun JDK détecté (sdkman, JAVA_HOME, PATH)".to_string());
+                return;
+            }
+        };
+        self.selected_jdk = Some(jdk.clone());
+        let outcome = module.compile(self.explorer.root(), &jdk);
+        self.status_message = Some(if outcome.success {
+            format!("Compilation réussie avec {}", jdk.label)
+        } else {
+            format!("Échec de la compilation avec {}", jdk.label)
+        });
+        self.compile_result = Some(outcome);
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) {
@@ -233,8 +277,20 @@ impl App {
             return;
         }
 
+        if self.compile_result.is_some() {
+            if matches!(key.code, KeyCode::Esc | KeyCode::Enter) {
+                self.compile_result = None;
+            }
+            return;
+        }
+
         if self.file_dialog.is_some() {
             self.handle_file_dialog_key(key);
+            return;
+        }
+
+        if self.compile_dialog.is_some() {
+            self.handle_compile_dialog_key(key);
             return;
         }
 
@@ -297,6 +353,14 @@ impl App {
             }
             KeyCode::F(4) => {
                 self.focus = Focus::Outline;
+                return;
+            }
+            KeyCode::F(5) if self.compilable => {
+                self.execute_action(Action::Compile);
+                return;
+            }
+            KeyCode::F(6) if self.compilable => {
+                self.execute_action(Action::ConfigureCompilation);
                 return;
             }
             _ => {}
@@ -459,6 +523,37 @@ impl App {
             return;
         }
         self.activate_dialog_selection();
+    }
+
+    fn handle_compile_dialog_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc => self.compile_dialog = None,
+            KeyCode::Up | KeyCode::Char('k') => {
+                if let Some(d) = self.compile_dialog.as_mut() {
+                    d.move_up();
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if let Some(d) = self.compile_dialog.as_mut() {
+                    d.move_down();
+                }
+            }
+            KeyCode::Enter => {
+                if let Some(dialog) = self.compile_dialog.take() {
+                    match dialog.selected_jdk() {
+                        Some(jdk) => {
+                            self.status_message = Some(format!("JDK sélectionné : {}", jdk.label));
+                            self.selected_jdk = Some(jdk.clone());
+                        }
+                        None => {
+                            self.status_message =
+                                Some("Aucun JDK détecté (sdkman, JAVA_HOME, PATH)".to_string());
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 
     fn handle_explorer_key(&mut self, key: KeyEvent) {

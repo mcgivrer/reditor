@@ -12,6 +12,8 @@ pub enum Action {
     GoToLine,
     ToggleExplorer,
     ToggleOutline,
+    Compile,
+    ConfigureCompilation,
     About,
 }
 
@@ -38,8 +40,11 @@ pub struct MenuBar {
 }
 
 impl MenuBar {
-    pub fn new() -> Self {
-        let menus = vec![
+    /// `compilable` indique si le projet ouvert propose au moins un module
+    /// de compilation (voir `compile::detect_module`) : le menu « Compiler »
+    /// n'est construit que dans ce cas.
+    pub fn new(compilable: bool) -> Self {
+        let mut menus = vec![
             MenuDef {
                 title: "Fichier",
                 items: vec![
@@ -69,11 +74,20 @@ impl MenuBar {
                     item("Structure", "", Action::ToggleOutline),
                 ],
             },
-            MenuDef {
-                title: "Aide",
-                items: vec![item("À propos", "F1", Action::About)],
-            },
         ];
+        if compilable {
+            menus.push(MenuDef {
+                title: "Compiler",
+                items: vec![
+                    item("Compiler le projet", "F5", Action::Compile),
+                    item("Configurer les JDK...", "F6", Action::ConfigureCompilation),
+                ],
+            });
+        }
+        menus.push(MenuDef {
+            title: "Aide",
+            items: vec![item("À propos", "F1", Action::About)],
+        });
         MenuBar {
             menus,
             active: false,
@@ -152,7 +166,7 @@ impl MenuBar {
 
 impl Default for MenuBar {
     fn default() -> Self {
-        Self::new()
+        Self::new(false)
     }
 }
 
