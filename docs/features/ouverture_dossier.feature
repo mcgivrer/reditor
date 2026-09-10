@@ -12,6 +12,11 @@ Fonctionnalité: Ouverture d'un dossier
     Et j'appuie sur "Entrée"
     Alors une fenêtre de dialogue "Ouvrir un dossier" est affichée
 
+  Scénario: Ouvrir un dossier avec le raccourci clavier Ctrl+Maj+O
+    Étant donné aucun dossier n'a été ouvert explicitement
+    Quand j'appuie sur "Ctrl+Maj+O"
+    Alors une fenêtre de dialogue "Ouvrir un dossier" est affichée
+
   Scénario: Échap referme le dialogue d'ouverture de dossier sans rien changer
     Étant donné aucun dossier n'a été ouvert explicitement
     Quand j'appuie sur "F10"

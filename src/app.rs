@@ -323,6 +323,10 @@ impl App {
         }
 
         if key.modifiers.contains(KeyModifiers::CONTROL) {
+            if key.modifiers.contains(KeyModifiers::SHIFT) && key.code == KeyCode::Char('o') {
+                self.execute_action(Action::OpenFolder);
+                return;
+            }
             match key.code {
                 KeyCode::Char('q') => self.execute_action(Action::Quit),
                 KeyCode::Char('n') => self.execute_action(Action::NewFile),

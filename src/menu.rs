@@ -51,7 +51,7 @@ impl MenuBar {
                 items: vec![
                     item("Nouveau", "Ctrl+N", Action::NewFile),
                     item("Ouvrir...", "Ctrl+O", Action::OpenFile),
-                    item("Ouvrir un dossier...", "", Action::OpenFolder),
+                    item("Ouvrir un dossier...", "Ctrl+Maj+O", Action::OpenFolder),
                     item("Enregistrer", "Ctrl+S", Action::Save),
                     item("Enregistrer sous...", "", Action::SaveAs),
                     item("Fermer l'onglet", "Ctrl+W", Action::CloseTab),
