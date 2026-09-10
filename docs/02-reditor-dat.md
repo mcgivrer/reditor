@@ -144,6 +144,13 @@ déplacement du curseur, couper/copier/coller de ligne) sont des méthodes de
 `Buffer`, indépendantes de tout code d'interface — elles sont donc testables
 unitairement sans terminal (voir `buffer::tests` et `docs/features/edition.feature`).
 
+Un onglet sans fichier réel sur disque (ex. le manuel utilisateur, voir §4.1
+et `docs/HELP.md`) porte un `virtual_name: Option<String>` utilisé par
+`display_name()` à défaut de `path`, et se construit via
+`Buffer::from_content`, qui reçoit son contenu déjà en mémoire (embarqué
+dans le binaire à la compilation via `include_str!`) plutôt que de le lire
+sur disque.
+
 ### 4.3 `menu.rs` — Définition déclarative du menu
 
 Le menu est une donnée statique (`MenuBar::new()`) : une liste de

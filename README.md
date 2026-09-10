@@ -66,6 +66,8 @@ La liste complète est détaillée dans la
 
 ## Documentation
 
+- [`docs/HELP.md`](docs/HELP.md) — guide utilisateur (en anglais),
+  accessible aussi depuis le logiciel via **Aide > Manuel utilisateur**.
 - [`docs/01-reditor-spec.md`](docs/01-reditor-spec.md) — spécification
   fonctionnelle (fonctionnalités, raccourcis, scénarios d'utilisation).
 - [`docs/02-reditor-dat.md`](docs/02-reditor-dat.md) — dossier

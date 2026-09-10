@@ -10,6 +10,13 @@ use crate::explorer::Explorer;
 use crate::hitbox::{EditorHitbox, Hitboxes};
 use crate::menu::{Action, MenuBar};
 use crate::outline::{extract_outline, OutlineItem};
+use crate::syntax::Language;
+
+/// Nom d'onglet affiché pour le manuel utilisateur embarqué.
+const HELP_TAB_NAME: &str = "HELP.md";
+/// Contenu du manuel utilisateur, embarqué dans le binaire à la compilation
+/// pour rester accessible sans dépendre d'un fichier présent sur disque.
+const HELP_CONTENT: &str = include_str!("../docs/HELP.md");
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Focus {
@@ -115,22 +122,49 @@ impl App {
             self.active_tab = idx;
         } else {
             let buf = Buffer::from_path(path)?;
-            let replace_empty = self.tabs.len() == 1
-                && self.tabs[0].path.is_none()
-                && !self.tabs[0].modified
-                && self.tabs[0].lines.len() == 1
-                && self.tabs[0].lines[0].is_empty();
-            if replace_empty {
-                self.tabs[0] = buf;
-                self.active_tab = 0;
-            } else {
-                self.tabs.push(buf);
-                self.active_tab = self.tabs.len() - 1;
-            }
+            self.push_tab(buf);
         }
         self.focus = Focus::Editor;
         self.outline_selected = 0;
         Ok(())
+    }
+
+    /// Ouvre (ou active l'onglet déjà ouvert pour) le manuel utilisateur
+    /// embarqué dans le binaire.
+    pub fn open_help(&mut self) {
+        if let Some(idx) = self
+            .tabs
+            .iter()
+            .position(|b| b.virtual_name.as_deref() == Some(HELP_TAB_NAME))
+        {
+            self.active_tab = idx;
+        } else {
+            self.push_tab(Buffer::from_content(
+                HELP_TAB_NAME,
+                HELP_CONTENT,
+                Language::Markdown,
+            ));
+        }
+        self.focus = Focus::Editor;
+        self.outline_selected = 0;
+    }
+
+    /// Insère `buf` dans un nouvel onglet, sauf s'il n'y a qu'un unique
+    /// onglet vide et sans nom, auquel cas il le remplace.
+    fn push_tab(&mut self, buf: Buffer) {
+        let replace_empty = self.tabs.len() == 1
+            && self.tabs[0].path.is_none()
+            && self.tabs[0].virtual_name.is_none()
+            && !self.tabs[0].modified
+            && self.tabs[0].lines.len() == 1
+            && self.tabs[0].lines[0].is_empty();
+        if replace_empty {
+            self.tabs[0] = buf;
+            self.active_tab = 0;
+        } else {
+            self.tabs.push(buf);
+            self.active_tab = self.tabs.len() - 1;
+        }
     }
 
     pub fn close_tab(&mut self, idx: usize) {
@@ -257,6 +291,7 @@ impl App {
             Action::ToggleExplorer => self.show_explorer = !self.show_explorer,
             Action::ToggleOutline => self.show_outline = !self.show_outline,
             Action::About => self.about_open = true,
+            Action::Help => self.open_help(),
         }
     }
 

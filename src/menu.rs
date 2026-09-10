@@ -13,6 +13,7 @@ pub enum Action {
     ToggleExplorer,
     ToggleOutline,
     About,
+    Help,
 }
 
 #[derive(Debug)]
@@ -71,7 +72,10 @@ impl MenuBar {
             },
             MenuDef {
                 title: "Aide",
-                items: vec![item("À propos", "F1", Action::About)],
+                items: vec![
+                    item("À propos", "F1", Action::About),
+                    item("Manuel utilisateur", "", Action::Help),
+                ],
             },
         ];
         MenuBar {

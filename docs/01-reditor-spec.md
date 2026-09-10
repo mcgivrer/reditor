@@ -75,6 +75,7 @@ Une barre de menu façon logiciel de bureau, activable par **F10** :
 | Affichage | Explorateur | Ctrl+B | Bascule l'affichage du panneau Explorateur (case à cocher reflétant l'état) |
 | Affichage | Structure | — | Bascule l'affichage du panneau Structure (case à cocher reflétant l'état) |
 | Aide | À propos | F1 | Affiche une fenêtre de rappel des raccourcis |
+| Aide | Manuel utilisateur | — | Ouvre le guide utilisateur complet ([`docs/HELP.md`](HELP.md), en anglais) dans un nouvel onglet ; réutilise l'onglet existant si déjà ouvert |
 
 Navigation dans le menu : flèches gauche/droite pour changer de menu,
 haut/bas pour changer d'entrée (les séparateurs sont ignorés), Entrée pour

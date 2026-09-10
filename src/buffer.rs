@@ -8,6 +8,9 @@ use crate::syntax::{self, Language, LineHighlightState};
 #[derive(Debug)]
 pub struct Buffer {
     pub path: Option<PathBuf>,
+    /// Nom affiché pour un onglet sans chemin de fichier réel (ex. le
+    /// manuel utilisateur embarqué), à défaut de `path`.
+    pub virtual_name: Option<String>,
     pub lines: Vec<String>,
     pub cursor_line: usize,
     pub cursor_col: usize,
@@ -25,6 +28,7 @@ impl Buffer {
     pub fn empty() -> Self {
         Buffer {
             path: None,
+            virtual_name: None,
             lines: vec![String::new()],
             cursor_line: 0,
             cursor_col: 0,
@@ -50,6 +54,7 @@ impl Buffer {
         let language = syntax::detect_language(&path);
         let mut buffer = Buffer {
             path: Some(path),
+            virtual_name: None,
             lines,
             cursor_line: 0,
             cursor_col: 0,
@@ -64,15 +69,45 @@ impl Buffer {
         Ok(buffer)
     }
 
+    /// Construit un onglet en lecture depuis un contenu embarqué dans le
+    /// binaire (ex. le manuel utilisateur), sans fichier associé sur disque.
+    pub fn from_content(name: &str, content: &str, language: Language) -> Self {
+        let mut lines: Vec<String> = content
+            .split('\n')
+            .map(|s| s.strip_suffix('\r').unwrap_or(s).to_string())
+            .collect();
+        if lines.is_empty() {
+            lines.push(String::new());
+        }
+        let mut buffer = Buffer {
+            path: None,
+            virtual_name: Some(name.to_string()),
+            lines,
+            cursor_line: 0,
+            cursor_col: 0,
+            scroll_row: 0,
+            scroll_col: 0,
+            modified: false,
+            language,
+            highlight_states: Vec::new(),
+            selection_anchor: None,
+        };
+        buffer.recompute_highlight_states();
+        buffer
+    }
+
     pub fn display_name(&self) -> String {
-        match &self.path {
-            Some(p) => p
+        if let Some(p) = &self.path {
+            return p
                 .file_name()
                 .and_then(|f| f.to_str())
                 .unwrap_or("?")
-                .to_string(),
-            None => "sans titre".to_string(),
+                .to_string();
         }
+        if let Some(name) = &self.virtual_name {
+            return name.clone();
+        }
+        "sans titre".to_string()
     }
 
     pub fn save(&mut self) -> Result<()> {
