@@ -4,13 +4,13 @@ Un éditeur de texte façon IDE, entièrement dans le terminal.
 
 `reditor` reprend l'organisation visuelle d'un IDE moderne — explorateur de
 fichiers, onglets, panneau de structure du fichier, barre de menu — sans
-quitter le terminal et sans souris.
+quitter le terminal.
 
 ![Aperçu de reditor](docs/assets/reditor-screenshot.svg)
 
 ## Fonctionnalités
 
-- **Explorateur de fichiers** : navigation arborescente au clavier.
+- **Explorateur de fichiers** : navigation arborescente au clavier et à la souris.
 - **Édition multi-fichiers à onglets** : ouvrir, modifier et sauvegarder
   plusieurs fichiers en parallèle.
 - **Coloration syntaxique** par extension de fichier : Rust, Java, Kotlin,
@@ -19,7 +19,7 @@ quitter le terminal et sans souris.
 - **Panneau Structure** : liste des symboles du fichier actif (fonctions,
   classes, titres, sections…) avec saut direct à la ligne correspondante.
 - **Barre de menu** (Fichier / Édition / Affichage / Aide) avec les entrées
-  standard, activable au clavier (`F10`).
+  standard, activable au clavier (`F10`) ou à la souris.
 - Affichage des panneaux adaptatif (masqués automatiquement si le terminal
   est trop étroit, ou selon le contexte de lancement).
 

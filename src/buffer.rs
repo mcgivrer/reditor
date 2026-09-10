@@ -16,6 +16,9 @@ pub struct Buffer {
     pub modified: bool,
     pub language: Language,
     pub highlight_states: Vec<LineHighlightState>,
+    /// Point d'ancrage d'une sélection en cours (ligne, colonne). `None` si
+    /// aucune sélection n'est active.
+    pub selection_anchor: Option<(usize, usize)>,
 }
 
 impl Buffer {
@@ -30,6 +33,7 @@ impl Buffer {
             modified: false,
             language: Language::PlainText,
             highlight_states: vec![LineHighlightState::default()],
+            selection_anchor: None,
         }
     }
 
@@ -54,6 +58,7 @@ impl Buffer {
             modified: false,
             language,
             highlight_states: Vec::new(),
+            selection_anchor: None,
         };
         buffer.recompute_highlight_states();
         Ok(buffer)
@@ -99,8 +104,12 @@ impl Buffer {
         self.highlight_states = states;
     }
 
+    pub fn line_char_len(&self, line: usize) -> usize {
+        self.lines[line].chars().count()
+    }
+
     fn current_line_char_len(&self) -> usize {
-        self.lines[self.cursor_line].chars().count()
+        self.line_char_len(self.cursor_line)
     }
 
     pub fn insert_char(&mut self, c: char) {
@@ -165,6 +174,7 @@ impl Buffer {
     }
 
     pub fn move_left(&mut self) {
+        self.clear_selection();
         if self.cursor_col > 0 {
             self.cursor_col -= 1;
         } else if self.cursor_line > 0 {
@@ -174,6 +184,7 @@ impl Buffer {
     }
 
     pub fn move_right(&mut self) {
+        self.clear_selection();
         if self.cursor_col < self.current_line_char_len() {
             self.cursor_col += 1;
         } else if self.cursor_line + 1 < self.lines.len() {
@@ -183,6 +194,7 @@ impl Buffer {
     }
 
     pub fn move_up(&mut self) {
+        self.clear_selection();
         if self.cursor_line > 0 {
             self.cursor_line -= 1;
             self.cursor_col = self.cursor_col.min(self.current_line_char_len());
@@ -190,6 +202,7 @@ impl Buffer {
     }
 
     pub fn move_down(&mut self) {
+        self.clear_selection();
         if self.cursor_line + 1 < self.lines.len() {
             self.cursor_line += 1;
             self.cursor_col = self.cursor_col.min(self.current_line_char_len());
@@ -197,14 +210,17 @@ impl Buffer {
     }
 
     pub fn move_home(&mut self) {
+        self.clear_selection();
         self.cursor_col = 0;
     }
 
     pub fn move_end(&mut self) {
+        self.clear_selection();
         self.cursor_col = self.current_line_char_len();
     }
 
     pub fn move_page(&mut self, delta: isize) {
+        self.clear_selection();
         let new_line = (self.cursor_line as isize + delta)
             .clamp(0, self.lines.len() as isize - 1) as usize;
         self.cursor_line = new_line;
@@ -212,12 +228,153 @@ impl Buffer {
     }
 
     pub fn goto_line(&mut self, line: usize) {
+        self.clear_selection();
         self.cursor_line = line.min(self.lines.len().saturating_sub(1));
         self.cursor_col = 0;
     }
 
     pub fn current_line(&self) -> &str {
         &self.lines[self.cursor_line]
+    }
+
+    /// Positionne le curseur à `(line, col)`, en clampant sur les bornes du
+    /// buffer et de la ligne visée (utilisé par un clic souris).
+    pub fn set_cursor_at(&mut self, line: usize, col: usize) {
+        self.cursor_line = line.min(self.lines.len().saturating_sub(1));
+        self.cursor_col = col.min(self.line_char_len(self.cursor_line));
+    }
+
+    pub fn start_selection(&mut self) {
+        self.selection_anchor = Some((self.cursor_line, self.cursor_col));
+    }
+
+    pub fn clear_selection(&mut self) {
+        self.selection_anchor = None;
+    }
+
+    /// Un point d'ancrage identique au curseur (clic simple, sans glisser)
+    /// ne compte pas comme une sélection.
+    pub fn has_selection(&self) -> bool {
+        self.selection_anchor
+            .is_some_and(|anchor| anchor != (self.cursor_line, self.cursor_col))
+    }
+
+    /// Bornes normalisées `(début, fin)` de la sélection, ou `None`.
+    pub fn selection_range(&self) -> Option<((usize, usize), (usize, usize))> {
+        if !self.has_selection() {
+            return None;
+        }
+        let anchor = self.selection_anchor?;
+        let cursor = (self.cursor_line, self.cursor_col);
+        Some(if anchor <= cursor { (anchor, cursor) } else { (cursor, anchor) })
+    }
+
+    pub fn selected_text(&self) -> Option<String> {
+        let (start, end) = self.selection_range()?;
+        Some(self.text_in_range(start, end))
+    }
+
+    fn text_in_range(&self, start: (usize, usize), end: (usize, usize)) -> String {
+        let (start_line, start_col) = start;
+        let (end_line, end_col) = end;
+        if start_line == end_line {
+            let line = &self.lines[start_line];
+            let from = char_to_byte(line, start_col);
+            let to = char_to_byte(line, end_col);
+            return line[from..to].to_string();
+        }
+        let mut result = String::new();
+        let first = &self.lines[start_line];
+        result.push_str(&first[char_to_byte(first, start_col)..]);
+        for line in &self.lines[start_line + 1..end_line] {
+            result.push('\n');
+            result.push_str(line);
+        }
+        result.push('\n');
+        let last = &self.lines[end_line];
+        result.push_str(&last[..char_to_byte(last, end_col)]);
+        result
+    }
+
+    /// Supprime le texte sélectionné, replace le curseur au point de départ
+    /// de la sélection et referme celle-ci.
+    pub fn delete_selection(&mut self) {
+        let Some((start, end)) = self.selection_range() else {
+            return;
+        };
+        let (start_line, start_col) = start;
+        let (end_line, end_col) = end;
+        let first = &self.lines[start_line];
+        let prefix = first[..char_to_byte(first, start_col)].to_string();
+        let last = &self.lines[end_line];
+        let tail = last[char_to_byte(last, end_col)..].to_string();
+        self.lines.drain(start_line..=end_line);
+        self.lines.insert(start_line, prefix + &tail);
+        self.cursor_line = start_line;
+        self.cursor_col = start_col;
+        self.clear_selection();
+        self.modified = true;
+        self.recompute_highlight_states();
+    }
+
+    /// Sélectionne le mot alphanumérique/`_` sous `(line, col)`. Ne crée
+    /// aucune sélection si le caractère visé n'appartient pas à un mot.
+    pub fn select_word_at(&mut self, line: usize, col: usize) {
+        self.clear_selection();
+        let line = line.min(self.lines.len().saturating_sub(1));
+        let chars: Vec<char> = self.lines[line].chars().collect();
+        let col = col.min(chars.len());
+        let is_word = |c: char| c.is_alphanumeric() || c == '_';
+        // Un clic juste après le dernier caractère du mot doit encore le sélectionner.
+        let probe = if col < chars.len() {
+            Some(col)
+        } else if col > 0 && is_word(chars[col - 1]) {
+            Some(col - 1)
+        } else {
+            None
+        };
+        let Some(probe) = probe.filter(|&i| is_word(chars[i])) else {
+            self.set_cursor_at(line, col);
+            return;
+        };
+        let mut start = probe;
+        while start > 0 && is_word(chars[start - 1]) {
+            start -= 1;
+        }
+        let mut end = probe + 1;
+        while end < chars.len() && is_word(chars[end]) {
+            end += 1;
+        }
+        self.cursor_line = line;
+        self.selection_anchor = Some((line, start));
+        self.cursor_col = end;
+    }
+
+    /// Insère `text` (potentiellement multi-lignes) à la position du
+    /// curseur, en coupant la ligne courante comme le fait `insert_newline`.
+    pub fn insert_text_at_cursor(&mut self, text: &str) {
+        let byte_idx = char_to_byte(&self.lines[self.cursor_line], self.cursor_col);
+        let tail = self.lines[self.cursor_line].split_off(byte_idx);
+        let mut fragments = text.split('\n');
+        let first = fragments.next().unwrap_or("");
+        self.lines[self.cursor_line].push_str(first);
+        let mut insert_at = self.cursor_line + 1;
+        let mut last_fragment = first;
+        for fragment in fragments {
+            self.lines.insert(insert_at, fragment.to_string());
+            insert_at += 1;
+            last_fragment = fragment;
+        }
+        let last_line = insert_at - 1;
+        self.cursor_col = if last_line == self.cursor_line {
+            self.cursor_col + last_fragment.chars().count()
+        } else {
+            last_fragment.chars().count()
+        };
+        self.lines[last_line].push_str(&tail);
+        self.cursor_line = last_line;
+        self.modified = true;
+        self.recompute_highlight_states();
     }
 
     /// Retire la ligne courante du buffer et la renvoie.
@@ -288,5 +445,68 @@ mod tests {
         assert_eq!(b.lines[1], "// Point d'entrée");
         assert_eq!(b.cursor_line, 1);
         assert_eq!(b.cursor_col, 0);
+    }
+
+    fn buffer_with(lines: &[&str]) -> Buffer {
+        let mut b = Buffer::empty();
+        b.lines = lines.iter().map(|l| l.to_string()).collect();
+        b
+    }
+
+    #[test]
+    fn selection_range_is_normalized_regardless_of_drag_direction() {
+        let mut b = buffer_with(&["bonjour le monde"]);
+        b.set_cursor_at(0, 11);
+        b.start_selection();
+        b.set_cursor_at(0, 3);
+        assert_eq!(b.selection_range(), Some(((0, 3), (0, 11))));
+        assert_eq!(b.selected_text(), Some("jour le ".to_string()));
+    }
+
+    #[test]
+    fn simple_click_without_drag_is_not_a_selection() {
+        let mut b = buffer_with(&["bonjour"]);
+        b.set_cursor_at(0, 2);
+        b.start_selection();
+        assert!(!b.has_selection());
+        assert_eq!(b.selected_text(), None);
+    }
+
+    #[test]
+    fn select_word_at_picks_word_boundaries() {
+        let mut b = buffer_with(&["let variable_name = 1;"]);
+        b.select_word_at(0, 6);
+        assert_eq!(b.selected_text(), Some("variable_name".to_string()));
+    }
+
+    #[test]
+    fn select_word_at_on_whitespace_creates_no_selection() {
+        let mut b = buffer_with(&["a  b"]);
+        b.select_word_at(0, 2);
+        assert!(!b.has_selection());
+    }
+
+    #[test]
+    fn delete_selection_merges_multiline_fragments() {
+        let mut b = buffer_with(&["premiere ligne", "seconde ligne", "troisieme ligne"]);
+        b.set_cursor_at(0, 9);
+        b.start_selection();
+        b.set_cursor_at(2, 6);
+        assert_eq!(b.selected_text(), Some("ligne\nseconde ligne\ntroisi".to_string()));
+        b.delete_selection();
+        assert_eq!(b.lines, vec!["premiere eme ligne".to_string()]);
+        assert_eq!(b.cursor_line, 0);
+        assert_eq!(b.cursor_col, 9);
+        assert!(!b.has_selection());
+    }
+
+    #[test]
+    fn insert_text_at_cursor_inserts_multiline_fragment() {
+        let mut b = buffer_with(&["debutfin"]);
+        b.set_cursor_at(0, 5);
+        b.insert_text_at_cursor("a\nb");
+        assert_eq!(b.lines, vec!["debuta".to_string(), "bfin".to_string()]);
+        assert_eq!(b.cursor_line, 1);
+        assert_eq!(b.cursor_col, 1);
     }
 }

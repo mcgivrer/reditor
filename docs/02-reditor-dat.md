@@ -357,7 +357,12 @@ Exécution : `cargo test --lib`.
 **Choix retenu** : scénarios Gherkin (`docs/features/*.feature`) exécutés
 par la crate `cucumber`, avec des étapes qui pilotent **directement une
 instance de `App`** (pas de terminal réel, pas de processus séparé) —
-voir `tests/features.rs`.
+voir `tests/features.rs`. Les scénarios impliquant la souris rendent
+toutefois l'interface une fois dans un `ratatui::backend::TestBackend` en
+mémoire avant de simuler un clic, seul moyen déterministe de connaître les
+zones cliquables (`App::hitboxes`) sans dupliquer la logique de layout de
+`ui::draw` — cela reste un backend de test, pas un terminal ni un processus
+réel.
 
 **Alternative envisagée et écartée pour l'essentiel des scénarios** : bout
 en bout via un pseudo-terminal réel (crate `portable-pty`) et un émulateur
@@ -373,7 +378,7 @@ Chaque scénario dispose d'un dossier temporaire isolé (`tempfile::tempdir`),
 détruit à la fin du scénario, pour ne jamais interférer avec le dépôt du
 projet ni les autres scénarios. Exécution : `cargo test --test features`.
 
-État actuel : 5 fichiers `.feature`, 34 scénarios, 122 étapes, tous
+État actuel : 7 fichiers `.feature`, 44 scénarios, 181 étapes, tous
 passants.
 
 ## 9. Limitations connues et dette technique
@@ -382,9 +387,10 @@ passants.
   chaque modification (`Buffer::recompute_highlight_states`) ; sans impact
   perceptible aux tailles de fichier usuelles, une future optimisation
   consisterait à ne recalculer qu'à partir de la ligne modifiée.
-- Pas d'undo/redo, pas de sélection de texte multi-lignes, pas de recherche
-  ni de remplacement — ces fonctionnalités n'ont pas été demandées à ce
-  stade.
+- Pas d'undo/redo, pas de recherche ni de remplacement — ces fonctionnalités
+  n'ont pas été demandées à ce stade.
+- Pas de redimensionnement des panneaux ni de barre de défilement
+  cliquable/glissable à la souris ; pas de menu contextuel (clic droit).
 - L'explorateur ne propose aucune opération d'écriture sur le système de
   fichiers (créer/renommer/supprimer).
 - Aucun test automatisé ne couvre le rendu visuel réel (uniquement testé
@@ -395,8 +401,8 @@ passants.
 
 - Undo/redo (pile de modifications sur `Buffer`).
 - Recherche/remplacement dans le buffer courant.
-- Sélection de texte et presse-papiers au niveau du caractère (au-delà de
-  la ligne entière).
+- Redimensionnement des panneaux et barre de défilement cliquable/glissable
+  à la souris ; menu contextuel (clic droit).
 - Opérations de fichier depuis l'explorateur (nouveau fichier/dossier,
   renommage, suppression).
 - Coloration incrémentale (ne retokeniser que les lignes affectées par une
