@@ -78,3 +78,30 @@ Fonctionnalité: Barre de menu
     Et j'appuie sur "n"
     Alors l'application ne doit pas se terminer
     Et aucune invite n'est affichée
+
+  Scénario: Ouvrir le manuel utilisateur depuis le menu Aide
+    Étant donné un nouvel onglet vide
+    Quand j'appuie sur "F10"
+    Et j'appuie sur "Right"
+    Et j'appuie sur "Right"
+    Et j'appuie sur "Right"
+    Et j'appuie sur "Bas"
+    Et j'appuie sur "Entrée"
+    Alors le nom de l'onglet actif est "HELP.md"
+
+  Scénario: Rouvrir le manuel utilisateur ne crée pas de doublon d'onglet
+    Étant donné un nouvel onglet vide
+    Quand j'appuie sur "F10"
+    Et j'appuie sur "Right"
+    Et j'appuie sur "Right"
+    Et j'appuie sur "Right"
+    Et j'appuie sur "Bas"
+    Et j'appuie sur "Entrée"
+    Et j'appuie sur "F10"
+    Et j'appuie sur "Right"
+    Et j'appuie sur "Right"
+    Et j'appuie sur "Right"
+    Et j'appuie sur "Bas"
+    Et j'appuie sur "Entrée"
+    Alors le nombre d'onglets ouverts est 1
+    Et le nom de l'onglet actif est "HELP.md"

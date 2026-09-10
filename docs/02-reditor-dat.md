@@ -147,6 +147,13 @@ déplacement du curseur, couper/copier/coller de ligne) sont des méthodes de
 `Buffer`, indépendantes de tout code d'interface — elles sont donc testables
 unitairement sans terminal (voir `buffer::tests` et `docs/features/edition.feature`).
 
+Un onglet sans fichier réel sur disque (ex. le manuel utilisateur, voir §4.1
+et `docs/HELP.md`) porte un `virtual_name: Option<String>` utilisé par
+`display_name()` à défaut de `path`, et se construit via
+`Buffer::from_content`, qui reçoit son contenu déjà en mémoire (embarqué
+dans le binaire à la compilation via `include_str!`) plutôt que de le lire
+sur disque.
+
 ### 4.3 `menu.rs` — Définition déclarative du menu
 
 Le menu est une donnée statique (`MenuBar::new()`) : une liste de
@@ -395,7 +402,12 @@ Exécution : `cargo test --lib`.
 **Choix retenu** : scénarios Gherkin (`docs/features/*.feature`) exécutés
 par la crate `cucumber`, avec des étapes qui pilotent **directement une
 instance de `App`** (pas de terminal réel, pas de processus séparé) —
-voir `tests/features.rs`.
+voir `tests/features.rs`. Les scénarios impliquant la souris rendent
+toutefois l'interface une fois dans un `ratatui::backend::TestBackend` en
+mémoire avant de simuler un clic, seul moyen déterministe de connaître les
+zones cliquables (`App::hitboxes`) sans dupliquer la logique de layout de
+`ui::draw` — cela reste un backend de test, pas un terminal ni un processus
+réel.
 
 **Alternative envisagée et écartée pour l'essentiel des scénarios** : bout
 en bout via un pseudo-terminal réel (crate `portable-pty`) et un émulateur
@@ -411,7 +423,7 @@ Chaque scénario dispose d'un dossier temporaire isolé (`tempfile::tempdir`),
 détruit à la fin du scénario, pour ne jamais interférer avec le dépôt du
 projet ni les autres scénarios. Exécution : `cargo test --test features`.
 
-État actuel : 8 fichiers `.feature`, 50 scénarios, 229 étapes, tous
+État actuel : 9 fichiers `.feature`, 56 scénarios, 270 étapes, tous
 passants.
 
 ## 9. Limitations connues et dette technique
@@ -420,9 +432,10 @@ passants.
   chaque modification (`Buffer::recompute_highlight_states`) ; sans impact
   perceptible aux tailles de fichier usuelles, une future optimisation
   consisterait à ne recalculer qu'à partir de la ligne modifiée.
-- Pas d'undo/redo, pas de sélection de texte multi-lignes, pas de recherche
-  ni de remplacement — ces fonctionnalités n'ont pas été demandées à ce
-  stade.
+- Pas d'undo/redo, pas de recherche ni de remplacement — ces fonctionnalités
+  n'ont pas été demandées à ce stade.
+- Pas de redimensionnement des panneaux ni de barre de défilement
+  cliquable/glissable à la souris ; pas de menu contextuel (clic droit).
 - L'explorateur ne propose aucune opération d'écriture sur le système de
   fichiers (créer/renommer/supprimer).
 - Aucun test automatisé ne couvre le rendu visuel réel (uniquement testé
@@ -441,8 +454,8 @@ passants.
 
 - Undo/redo (pile de modifications sur `Buffer`).
 - Recherche/remplacement dans le buffer courant.
-- Sélection de texte et presse-papiers au niveau du caractère (au-delà de
-  la ligne entière).
+- Redimensionnement des panneaux et barre de défilement cliquable/glissable
+  à la souris ; menu contextuel (clic droit).
 - Opérations de fichier depuis l'explorateur (nouveau fichier/dossier,
   renommage, suppression).
 - Coloration incrémentale (ne retokeniser que les lignes affectées par une

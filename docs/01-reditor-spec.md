@@ -17,7 +17,8 @@ explorateur de fichiers sur le côté gauche, une zone d'édition centrale à
 onglets, un panneau de structure du fichier sur la droite, une barre de menu
 et une barre de statut. Il vise à offrir un confort d'édition proche d'un
 éditeur graphique tout en restant utilisable dans un simple terminal, sans
-souris et sans serveur graphique.
+serveur graphique. La souris (clic, glisser, molette) est prise en charge en
+complément du clavier lorsque le terminal hôte la relaie.
 
 ### 1.2 Public visé
 
@@ -77,6 +78,7 @@ Une barre de menu façon logiciel de bureau, activable par **F10** :
 | Compiler *(si projet compilable)* | Compiler le projet | F5 | Compile le projet avec le JDK sélectionné |
 | Compiler *(si projet compilable)* | Configurer les JDK... | F6 | Ouvre le dialogue de sélection du JDK à utiliser |
 | Aide | À propos | F1 | Affiche une fenêtre de rappel des raccourcis |
+| Aide | Manuel utilisateur | — | Ouvre le guide utilisateur complet ([`docs/HELP.md`](HELP.md), en anglais) dans un nouvel onglet ; réutilise l'onglet existant si déjà ouvert |
 
 Navigation dans le menu : flèches gauche/droite pour changer de menu,
 haut/bas pour changer d'entrée (les séparateurs sont ignorés), Entrée pour
@@ -243,11 +245,10 @@ existe n'importe où dans l'arborescence.
 
 ## 6. Limitations connues
 
-- Pas de prise en charge de la souris : toute la navigation se fait au
-  clavier.
 - Pas d'annulation/rétablissement (undo/redo).
-- Le presse-papiers Couper/Copier/Coller opère à la granularité de la
-  ligne entière (pas de sélection de texte arbitraire).
+- Le presse-papiers Couper/Copier/Coller opère sur la sélection de texte
+  active, ou à défaut sur la ligne entière ; pas de redimensionnement des
+  panneaux ni de barre de défilement cliquable à la souris.
 - La coloration syntaxique est fondée sur des règles lexicales simples par
   langage (mots-clés, chaînes, commentaires, etc.), pas sur une analyse
   syntaxique complète : certains cas rares peuvent être mal colorés (par

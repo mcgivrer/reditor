@@ -3,12 +3,13 @@ use std::path::Path;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Tabs, Wrap};
+use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap};
 use ratatui::Frame;
 
 use crate::app::{App, Focus, PromptKind};
 use crate::compile::CompileOutcome;
 use crate::dialog::{CompileDialog, DialogMode, FileDialog};
+use crate::hitbox::{DropdownHitbox, EditorHitbox, FileDialogHitbox, Hitboxes, PanelHitbox};
 use crate::menu::{Action, MenuItem};
 use crate::syntax::{self, style_for};
 
@@ -64,40 +65,49 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     idx += 1;
     let outline_area = if show_outline { Some(cols[idx]) } else { None };
 
-    draw_menu_bar(frame, app, menu_area);
-    if let Some(area) = explorer_area {
-        draw_explorer(frame, app, area);
-    }
-    draw_center(frame, app, center_area);
-    if let Some(area) = outline_area {
-        draw_outline(frame, app, area);
-    }
+    let menu_titles = draw_menu_bar(frame, app, menu_area);
+    let explorer_hitbox = explorer_area.map(|area| draw_explorer(frame, app, area));
+    let (tabs_hitboxes, editor_hitbox) = draw_center(frame, app, center_area);
+    let outline_hitbox = outline_area.map(|area| draw_outline(frame, app, area));
     draw_status(frame, app, status_area);
 
-    if app.menu.active {
-        draw_menu_dropdown(frame, app, menu_area, size);
-    }
+    let menu_dropdown = if app.menu.active {
+        Some(draw_menu_dropdown(frame, app, menu_area, size))
+    } else {
+        None
+    };
     // `main_area` (jamais la ligne 0) sert de zone d'ancrage pour les popups,
     // afin que la barre de menu reste toujours visible tout en haut de l'écran.
-    if let Some(prompt) = &app.prompt {
-        draw_prompt(frame, prompt, main_area);
-    }
-    if app.about_open {
-        draw_about(frame, main_area);
-    }
-    if let Some(dialog) = &app.file_dialog {
-        draw_file_dialog(frame, dialog, main_area);
-    }
+    let prompt_hitbox = app.prompt.as_ref().map(|prompt| draw_prompt(frame, prompt, main_area));
+    let about_hitbox = if app.about_open { Some(draw_about(frame, main_area)) } else { None };
+    let file_dialog_hitbox = app
+        .file_dialog
+        .as_ref()
+        .map(|dialog| draw_file_dialog(frame, dialog, main_area));
     if let Some(dialog) = &app.compile_dialog {
         draw_compile_dialog(frame, dialog, main_area);
     }
     if let Some(outcome) = &app.compile_result {
         draw_compile_result(frame, outcome, main_area);
     }
+
+    app.hitboxes = Hitboxes {
+        menu_titles,
+        menu_dropdown,
+        tabs: tabs_hitboxes,
+        explorer: explorer_hitbox,
+        outline: outline_hitbox,
+        editor: Some(editor_hitbox),
+        file_dialog: file_dialog_hitbox,
+        prompt: prompt_hitbox,
+        about: about_hitbox,
+    };
 }
 
-fn draw_menu_bar(frame: &mut Frame, app: &App, area: Rect) {
+fn draw_menu_bar(frame: &mut Frame, app: &App, area: Rect) -> Vec<Rect> {
     let mut spans = Vec::with_capacity(app.menu.menus.len());
+    let mut titles = Vec::with_capacity(app.menu.menus.len());
+    let mut x = area.x;
     for (i, menu_def) in app.menu.menus.iter().enumerate() {
         let selected = app.menu.active && i == app.menu.selected_menu;
         let style = if selected {
@@ -108,11 +118,16 @@ fn draw_menu_bar(frame: &mut Frame, app: &App, area: Rect) {
         } else {
             Style::default().fg(Color::White).bg(Color::DarkGray)
         };
-        spans.push(Span::styled(format!(" {} ", menu_def.title), style));
+        let label = format!(" {} ", menu_def.title);
+        let width = label.chars().count() as u16;
+        titles.push(Rect { x, y: area.y, width, height: 1 });
+        x += width;
+        spans.push(Span::styled(label, style));
     }
     let line = Line::from(spans);
     let paragraph = Paragraph::new(line).style(Style::default().bg(Color::DarkGray));
     frame.render_widget(paragraph, area);
+    titles
 }
 
 fn menu_x_offset(app: &App, index: usize) -> u16 {
@@ -138,7 +153,7 @@ fn item_label(app: &App, item: &MenuItem) -> String {
     }
 }
 
-fn draw_menu_dropdown(frame: &mut Frame, app: &App, menu_area: Rect, screen: Rect) {
+fn draw_menu_dropdown(frame: &mut Frame, app: &App, menu_area: Rect, screen: Rect) -> DropdownHitbox {
     let menu_def = &app.menu.menus[app.menu.selected_menu];
     let width = menu_def
         .items
@@ -166,17 +181,21 @@ fn draw_menu_dropdown(frame: &mut Frame, app: &App, menu_area: Rect, screen: Rec
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
+    let mut item_hitboxes = Vec::with_capacity(menu_def.items.len());
     let items: Vec<ListItem> = menu_def
         .items
         .iter()
         .enumerate()
         .map(|(i, it)| {
+            let row = Rect { x: inner.x, y: inner.y + i as u16, width: inner.width, height: 1 };
             if it.action.is_none() {
+                item_hitboxes.push(None);
                 return ListItem::new(Line::from(Span::styled(
                     "─".repeat(inner.width as usize),
                     Style::default().fg(Color::DarkGray),
                 )));
             }
+            item_hitboxes.push(Some(row));
             let selected = i == app.menu.selected_item;
             let style = if selected {
                 Style::default()
@@ -197,6 +216,7 @@ fn draw_menu_dropdown(frame: &mut Frame, app: &App, menu_area: Rect, screen: Rec
         .collect();
     let list = List::new(items);
     frame.render_widget(list, inner);
+    DropdownHitbox { area, items: item_hitboxes }
 }
 
 fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
@@ -207,7 +227,7 @@ fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
     Rect { x, y, width, height }
 }
 
-fn draw_prompt(frame: &mut Frame, prompt: &crate::app::Prompt, screen: Rect) {
+fn draw_prompt(frame: &mut Frame, prompt: &crate::app::Prompt, screen: Rect) -> Rect {
     let width = (prompt.label.chars().count().max(prompt.input.chars().count()) as u16 + 6)
         .clamp(30, 90);
     let area = centered_rect(width, 3, screen);
@@ -229,9 +249,10 @@ fn draw_prompt(frame: &mut Frame, prompt: &crate::app::Prompt, screen: Rect) {
                 .min(inner.width.saturating_sub(1));
         frame.set_cursor_position((cursor_x, inner.y));
     }
+    area
 }
 
-fn draw_about(frame: &mut Frame, screen: Rect) {
+fn draw_about(frame: &mut Frame, screen: Rect) -> Rect {
     let lines = [
         "reditor — éditeur de texte façon IDE dans le terminal",
         "",
@@ -255,9 +276,10 @@ fn draw_about(frame: &mut Frame, screen: Rect) {
     frame.render_widget(block, area);
     let text: Vec<Line> = lines.iter().map(|l| Line::from(*l)).collect();
     frame.render_widget(Paragraph::new(text), inner);
+    area
 }
 
-fn draw_file_dialog(frame: &mut Frame, dialog: &FileDialog, screen: Rect) {
+fn draw_file_dialog(frame: &mut Frame, dialog: &FileDialog, screen: Rect) -> FileDialogHitbox {
     let width = (screen.width * 3 / 4).clamp(40, 100).min(screen.width);
     let height = (screen.height * 3 / 4).clamp(10, screen.height);
     let area = centered_rect(width, height, screen);
@@ -334,6 +356,7 @@ fn draw_file_dialog(frame: &mut Frame, dialog: &FileDialog, screen: Rect) {
     };
     let list = List::new(items).highlight_style(highlight_style);
     frame.render_stateful_widget(list, tree_area, &mut state);
+    let tree_hitbox = PanelHitbox { inner: tree_area, offset: state.offset() };
 
     if let Some(fa) = filename_area {
         let label_style = if dialog.editing_filename {
@@ -362,6 +385,8 @@ fn draw_file_dialog(frame: &mut Frame, dialog: &FileDialog, screen: Rect) {
         Paragraph::new(hint).style(Style::default().fg(Color::DarkGray)),
         hint_area,
     );
+
+    FileDialogHitbox { area, tree: tree_hitbox, filename_area }
 }
 
 fn draw_compile_dialog(frame: &mut Frame, dialog: &CompileDialog, screen: Rect) {
@@ -443,7 +468,7 @@ fn draw_compile_result(frame: &mut Frame, outcome: &CompileOutcome, screen: Rect
     );
 }
 
-fn draw_explorer(frame: &mut Frame, app: &App, area: Rect) {
+fn draw_explorer(frame: &mut Frame, app: &App, area: Rect) -> PanelHitbox {
     let focused = app.focus == Focus::Explorer;
     let border_style = if focused {
         Style::default().fg(Color::Cyan)
@@ -506,9 +531,10 @@ fn draw_explorer(frame: &mut Frame, app: &App, area: Rect) {
     };
     let list = List::new(items).highlight_style(highlight_style);
     frame.render_stateful_widget(list, inner, &mut state);
+    PanelHitbox { inner, offset: state.offset() }
 }
 
-fn draw_outline(frame: &mut Frame, app: &mut App, area: Rect) {
+fn draw_outline(frame: &mut Frame, app: &mut App, area: Rect) -> PanelHitbox {
     let focused = app.focus == Focus::Outline;
     let border_style = if focused {
         Style::default().fg(Color::Cyan)
@@ -531,7 +557,7 @@ fn draw_outline(frame: &mut Frame, app: &mut App, area: Rect) {
         let msg = Paragraph::new("(aucun symbole détecté)")
             .style(Style::default().fg(Color::DarkGray));
         frame.render_widget(msg, inner);
-        return;
+        return PanelHitbox { inner, offset: 0 };
     }
 
     let items: Vec<ListItem> = items_data
@@ -554,9 +580,10 @@ fn draw_outline(frame: &mut Frame, app: &mut App, area: Rect) {
     };
     let list = List::new(items).highlight_style(highlight_style);
     frame.render_stateful_widget(list, inner, &mut state);
+    PanelHitbox { inner, offset: state.offset() }
 }
 
-fn draw_center(frame: &mut Frame, app: &mut App, area: Rect) {
+fn draw_center(frame: &mut Frame, app: &mut App, area: Rect) -> (Vec<Rect>, EditorHitbox) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(1), Constraint::Min(1)])
@@ -564,24 +591,36 @@ fn draw_center(frame: &mut Frame, app: &mut App, area: Rect) {
     let tabs_area = rows[0];
     let editor_area = rows[1];
 
-    let titles: Vec<Line> = app
-        .tabs
-        .iter()
-        .map(|b| {
-            let marker = if b.modified { "*" } else { "" };
-            Line::from(format!(" {}{} ", b.display_name(), marker))
-        })
-        .collect();
-    let tabs = Tabs::new(titles)
-        .select(app.active_tab)
-        .highlight_style(
+    // Rendu manuel des onglets (plutôt que le widget `Tabs`) afin que chaque
+    // onglet ait un `Rect` calculé par la même boucle qui construit l'affichage,
+    // condition nécessaire pour qu'un clic souris retrouve l'onglet visé.
+    let mut tab_spans = Vec::with_capacity(app.tabs.len() * 3);
+    let mut tabs_hitboxes = Vec::with_capacity(app.tabs.len());
+    let mut x = tabs_area.x;
+    let tab_count = app.tabs.len();
+    for (i, b) in app.tabs.iter().enumerate() {
+        let marker = if b.modified { "*" } else { "" };
+        let title = format!("{}{}", b.display_name(), marker);
+        let title_style = if i == app.active_tab {
             Style::default()
                 .fg(Color::Black)
                 .bg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )
-        .divider("│");
-    frame.render_widget(tabs, tabs_area);
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+        let tab_width = title.chars().count() as u16 + 2;
+        tabs_hitboxes.push(Rect { x, y: tabs_area.y, width: tab_width, height: 1 });
+        x += tab_width;
+        tab_spans.push(Span::raw(" "));
+        tab_spans.push(Span::styled(title, title_style));
+        tab_spans.push(Span::raw(" "));
+        if i + 1 < tab_count {
+            tab_spans.push(Span::raw("│"));
+            x += 1;
+        }
+    }
+    frame.render_widget(Paragraph::new(Line::from(tab_spans)), tabs_area);
 
     let focused = app.focus == Focus::Editor;
     let border_style = if focused {
@@ -603,6 +642,7 @@ fn draw_center(frame: &mut Frame, app: &mut App, area: Rect) {
     let start = buf.scroll_row;
     let end = (start + height).min(buf.lines.len());
     let gutter_width = buf.lines.len().to_string().len().max(3);
+    let selection = buf.selection_range();
 
     let mut lines: Vec<Line> = Vec::with_capacity(end.saturating_sub(start));
     for i in start..end {
@@ -613,8 +653,49 @@ fn draw_center(frame: &mut Frame, app: &mut App, area: Rect) {
             format!("{:>width$} ", i + 1, width = gutter_width),
             Style::default().fg(Color::DarkGray),
         ));
+        // Sélection sur cette ligne (bornes en colonnes de caractères), ou `None`.
+        let sel_on_line = selection.and_then(|((sl, sc), (el, ec))| {
+            if i < sl || i > el {
+                None
+            } else {
+                let from = if i == sl { sc } else { 0 };
+                let to = if i == el { ec } else { buf.line_char_len(i) };
+                (to > from).then_some((from, to))
+            }
+        });
+        let mut col = 0usize;
         for (kind, text) in tokens {
-            spans.push(Span::styled(text, style_for(kind)));
+            let token_len = text.chars().count();
+            let token_start = col;
+            let token_end = col + token_len;
+            col = token_end;
+            let base_style = style_for(kind);
+            match sel_on_line {
+                Some((sel_from, sel_to)) if token_end > sel_from && token_start < sel_to => {
+                    let chars: Vec<char> = text.chars().collect();
+                    let pre = sel_from.saturating_sub(token_start).min(token_len);
+                    let post = sel_to.saturating_sub(token_start).min(token_len);
+                    if pre > 0 {
+                        spans.push(Span::styled(
+                            chars[..pre].iter().collect::<String>(),
+                            base_style,
+                        ));
+                    }
+                    if post > pre {
+                        spans.push(Span::styled(
+                            chars[pre..post].iter().collect::<String>(),
+                            base_style.add_modifier(Modifier::REVERSED),
+                        ));
+                    }
+                    if post < token_len {
+                        spans.push(Span::styled(
+                            chars[post..].iter().collect::<String>(),
+                            base_style,
+                        ));
+                    }
+                }
+                _ => spans.push(Span::styled(text, base_style)),
+            }
         }
         lines.push(Line::from(spans));
     }
@@ -632,6 +713,8 @@ fn draw_center(frame: &mut Frame, app: &mut App, area: Rect) {
             frame.set_cursor_position((cursor_x, cursor_y));
         }
     }
+
+    (tabs_hitboxes, EditorHitbox { inner, gutter_width })
 }
 
 fn draw_status(frame: &mut Frame, app: &App, area: Rect) {

@@ -16,6 +16,7 @@ pub enum Action {
     Compile,
     ConfigureCompilation,
     About,
+    Help,
 }
 
 #[derive(Debug)]
@@ -62,8 +63,8 @@ impl MenuBar {
             MenuDef {
                 title: "Édition",
                 items: vec![
-                    item("Couper la ligne", "Ctrl+X", Action::CutLine),
-                    item("Copier la ligne", "Ctrl+C", Action::CopyLine),
+                    item("Couper", "Ctrl+X", Action::CutLine),
+                    item("Copier", "Ctrl+C", Action::CopyLine),
                     item("Coller", "Ctrl+V", Action::PasteLine),
                     separator(),
                     item("Aller à la ligne...", "Ctrl+G", Action::GoToLine),
@@ -88,7 +89,10 @@ impl MenuBar {
         }
         menus.push(MenuDef {
             title: "Aide",
-            items: vec![item("À propos", "F1", Action::About)],
+            items: vec![
+                item("À propos", "F1", Action::About),
+                item("Manuel utilisateur", "", Action::Help),
+            ],
         });
         MenuBar {
             menus,
@@ -99,8 +103,14 @@ impl MenuBar {
     }
 
     pub fn open(&mut self) {
+        self.open_at(0);
+    }
+
+    /// Ouvre le menu et sélectionne directement le menu d'index `index`
+    /// (utilisé par un clic sur un titre de la barre).
+    pub fn open_at(&mut self, index: usize) {
         self.active = true;
-        self.selected_menu = 0;
+        self.selected_menu = index.min(self.menus.len().saturating_sub(1));
         self.selected_item = 0;
         self.skip_separator_forward();
     }

@@ -1,13 +1,23 @@
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use ratatui::layout::Position;
 
 use crate::buffer::Buffer;
 use crate::compile::{self, CompileOutcome, Jdk};
 use crate::dialog::{CompileDialog, DialogMode, FileDialog};
 use crate::explorer::Explorer;
+use crate::hitbox::{EditorHitbox, Hitboxes};
 use crate::menu::{Action, MenuBar};
 use crate::outline::{extract_outline, OutlineItem};
+use crate::syntax::Language;
+
+/// Nom d'onglet affiché pour le manuel utilisateur embarqué.
+const HELP_TAB_NAME: &str = "HELP.md";
+/// Contenu du manuel utilisateur, embarqué dans le binaire à la compilation
+/// pour rester accessible sans dépendre d'un fichier présent sur disque.
+const HELP_CONTENT: &str = include_str!("../docs/HELP.md");
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Focus {
@@ -29,6 +39,15 @@ pub struct Prompt {
     pub input: String,
 }
 
+/// Contenu du presse-papiers : une ligne entière (Couper/Copier la ligne
+/// sans sélection) ou un fragment de texte arbitraire (sélection), pour que
+/// Coller sache s'il doit insérer une nouvelle ligne ou du texte en place.
+#[derive(Debug, Clone)]
+pub enum ClipboardContent {
+    Line(String),
+    Fragment(String),
+}
+
 #[derive(Debug)]
 pub struct App {
     pub tabs: Vec<Buffer>,
@@ -41,7 +60,7 @@ pub struct App {
     pub status_message: Option<String>,
     pub should_quit: bool,
     pub menu: MenuBar,
-    pub clipboard: Option<String>,
+    pub clipboard: Option<ClipboardContent>,
     pub prompt: Option<Prompt>,
     pub file_dialog: Option<FileDialog>,
     pub about_open: bool,
@@ -52,6 +71,9 @@ pub struct App {
     pub compile_dialog: Option<CompileDialog>,
     pub selected_jdk: Option<Jdk>,
     pub compile_result: Option<CompileOutcome>,
+    pub hitboxes: Hitboxes,
+    /// Position et instant du dernier clic gauche relâché, pour détecter un double-clic.
+    pub last_click: Option<(Instant, u16, u16)>,
 }
 
 impl App {
@@ -81,6 +103,8 @@ impl App {
             compile_dialog: None,
             selected_jdk: None,
             compile_result: None,
+            hitboxes: Hitboxes::default(),
+            last_click: None,
         };
         match initial_file {
             Some(path) if path.is_file() => app.open_file(path)?,
@@ -111,22 +135,49 @@ impl App {
             self.active_tab = idx;
         } else {
             let buf = Buffer::from_path(path)?;
-            let replace_empty = self.tabs.len() == 1
-                && self.tabs[0].path.is_none()
-                && !self.tabs[0].modified
-                && self.tabs[0].lines.len() == 1
-                && self.tabs[0].lines[0].is_empty();
-            if replace_empty {
-                self.tabs[0] = buf;
-                self.active_tab = 0;
-            } else {
-                self.tabs.push(buf);
-                self.active_tab = self.tabs.len() - 1;
-            }
+            self.push_tab(buf);
         }
         self.focus = Focus::Editor;
         self.outline_selected = 0;
         Ok(())
+    }
+
+    /// Ouvre (ou active l'onglet déjà ouvert pour) le manuel utilisateur
+    /// embarqué dans le binaire.
+    pub fn open_help(&mut self) {
+        if let Some(idx) = self
+            .tabs
+            .iter()
+            .position(|b| b.virtual_name.as_deref() == Some(HELP_TAB_NAME))
+        {
+            self.active_tab = idx;
+        } else {
+            self.push_tab(Buffer::from_content(
+                HELP_TAB_NAME,
+                HELP_CONTENT,
+                Language::Markdown,
+            ));
+        }
+        self.focus = Focus::Editor;
+        self.outline_selected = 0;
+    }
+
+    /// Insère `buf` dans un nouvel onglet, sauf s'il n'y a qu'un unique
+    /// onglet vide et sans nom, auquel cas il le remplace.
+    fn push_tab(&mut self, buf: Buffer) {
+        let replace_empty = self.tabs.len() == 1
+            && self.tabs[0].path.is_none()
+            && self.tabs[0].virtual_name.is_none()
+            && !self.tabs[0].modified
+            && self.tabs[0].lines.len() == 1
+            && self.tabs[0].lines[0].is_empty();
+        if replace_empty {
+            self.tabs[0] = buf;
+            self.active_tab = 0;
+        } else {
+            self.tabs.push(buf);
+            self.active_tab = self.tabs.len() - 1;
+        }
     }
 
     pub fn close_tab(&mut self, idx: usize) {
@@ -220,16 +271,34 @@ impl App {
                 }
             }
             Action::CutLine => {
-                let text = self.current_buffer_mut().remove_current_line();
-                self.clipboard = Some(text);
+                let buf = self.current_buffer_mut();
+                if buf.has_selection() {
+                    let text = buf.selected_text().unwrap_or_default();
+                    buf.delete_selection();
+                    self.clipboard = Some(ClipboardContent::Fragment(text));
+                } else {
+                    let text = buf.remove_current_line();
+                    self.clipboard = Some(ClipboardContent::Line(text));
+                }
             }
             Action::CopyLine => {
-                let text = self.current_buffer().current_line().to_string();
-                self.clipboard = Some(text);
+                let buf = self.current_buffer();
+                let content = match buf.selected_text() {
+                    Some(text) => ClipboardContent::Fragment(text),
+                    None => ClipboardContent::Line(buf.current_line().to_string()),
+                };
+                self.clipboard = Some(content);
             }
             Action::PasteLine => {
-                if let Some(text) = self.clipboard.clone() {
-                    self.current_buffer_mut().insert_line_below(text);
+                if let Some(content) = self.clipboard.clone() {
+                    let buf = self.current_buffer_mut();
+                    if buf.has_selection() {
+                        buf.delete_selection();
+                    }
+                    match content {
+                        ClipboardContent::Line(text) => buf.insert_line_below(text),
+                        ClipboardContent::Fragment(text) => buf.insert_text_at_cursor(&text),
+                    }
                 }
             }
             Action::GoToLine => {
@@ -246,6 +315,7 @@ impl App {
                 self.compile_dialog = Some(CompileDialog::new(compile::detect_jdks()));
             }
             Action::About => self.about_open = true,
+            Action::Help => self.open_help(),
         }
     }
 
@@ -648,6 +718,17 @@ impl App {
 
     fn handle_editor_key(&mut self, key: KeyEvent) {
         let buf = self.current_buffer_mut();
+        if buf.has_selection()
+            && matches!(
+                key.code,
+                KeyCode::Char(_) | KeyCode::Enter | KeyCode::Tab | KeyCode::Backspace | KeyCode::Delete
+            )
+        {
+            buf.delete_selection();
+            if matches!(key.code, KeyCode::Backspace | KeyCode::Delete) {
+                return;
+            }
+        }
         match key.code {
             KeyCode::Char(c) => buf.insert_char(c),
             KeyCode::Enter => buf.insert_newline(),
@@ -663,6 +744,236 @@ impl App {
             KeyCode::PageUp => buf.move_page(-20),
             KeyCode::PageDown => buf.move_page(20),
             _ => {}
+        }
+    }
+
+    /// Point d'entrée souris, en miroir de `handle_key`. Même ordre de
+    /// priorité que le clavier : À propos > dialogue fichier > invite >
+    /// titre de menu cliqué > menu actif > zone cliquée.
+    pub fn handle_mouse(&mut self, mouse: MouseEvent) {
+        let pos = Position::new(mouse.column, mouse.row);
+        let left_down = mouse.kind == MouseEventKind::Down(MouseButton::Left);
+
+        if self.about_open {
+            if left_down {
+                self.about_open = false;
+            }
+            return;
+        }
+
+        if self.file_dialog.is_some() {
+            self.handle_file_dialog_mouse(mouse, pos);
+            return;
+        }
+
+        if self.prompt.is_some() {
+            if left_down && !self.hitboxes.prompt.is_some_and(|r| r.contains(pos)) {
+                self.prompt = None;
+            }
+            return;
+        }
+
+        let clicked_title = self.hitboxes.menu_titles.iter().position(|r| r.contains(pos));
+        if left_down
+            && let Some(idx) = clicked_title
+        {
+            if self.menu.active && self.menu.selected_menu == idx {
+                self.menu.close();
+            } else {
+                self.menu.open_at(idx);
+            }
+            return;
+        }
+
+        if self.menu.active {
+            self.handle_menu_mouse(mouse, pos);
+            return;
+        }
+
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) => self.handle_left_click(pos),
+            MouseEventKind::Drag(MouseButton::Left) => self.handle_left_drag(pos),
+            MouseEventKind::ScrollUp => self.handle_scroll(-3),
+            MouseEventKind::ScrollDown => self.handle_scroll(3),
+            _ => {}
+        }
+    }
+
+    fn handle_menu_mouse(&mut self, mouse: MouseEvent, pos: Position) {
+        if mouse.kind != MouseEventKind::Down(MouseButton::Left) {
+            return;
+        }
+        let Some(dropdown) = self.hitboxes.menu_dropdown.clone() else {
+            self.menu.close();
+            return;
+        };
+        if let Some(idx) =
+            dropdown.items.iter().position(|r| r.is_some_and(|r| r.contains(pos)))
+        {
+            self.menu.selected_item = idx;
+            if let Some(action) = self.menu.selected_action() {
+                self.execute_action(action);
+            } else {
+                self.menu.close();
+            }
+        } else if !dropdown.area.contains(pos) {
+            self.menu.close();
+        }
+    }
+
+    fn handle_left_click(&mut self, pos: Position) {
+        if let Some(idx) = self.hitboxes.tabs.iter().position(|r| r.contains(pos)) {
+            if idx < self.tabs.len() {
+                self.active_tab = idx;
+            }
+            return;
+        }
+
+        if let Some(panel) = self.hitboxes.explorer
+            && panel.inner.contains(pos)
+        {
+            self.focus = Focus::Explorer;
+            let idx = panel.offset + (pos.y - panel.inner.y) as usize;
+            if idx < self.explorer.entries.len() {
+                self.explorer.selected = idx;
+                if let Some(path) = self.explorer.activate_selected()
+                    && let Err(e) = self.open_file(path)
+                {
+                    self.status_message = Some(format!("Erreur : {e}"));
+                }
+            }
+            return;
+        }
+
+        if let Some(panel) = self.hitboxes.outline
+            && panel.inner.contains(pos)
+        {
+            let idx = panel.offset + (pos.y - panel.inner.y) as usize;
+            let items = self.current_outline();
+            if idx < items.len() {
+                let line = items[idx].line;
+                self.outline_selected = idx;
+                self.current_buffer_mut().goto_line(line);
+                self.focus = Focus::Editor;
+            } else {
+                self.focus = Focus::Outline;
+            }
+            return;
+        }
+
+        if let Some(editor) = self.hitboxes.editor
+            && editor.inner.contains(pos)
+        {
+            self.focus = Focus::Editor;
+            let is_double = self.register_click(pos);
+            let (line, col) = self.editor_position_at(editor, pos);
+            let buf = self.current_buffer_mut();
+            if is_double {
+                buf.select_word_at(line, col);
+            } else {
+                buf.set_cursor_at(line, col);
+                buf.start_selection();
+            }
+        }
+    }
+
+    fn handle_left_drag(&mut self, pos: Position) {
+        let Some(editor) = self.hitboxes.editor else {
+            return;
+        };
+        if !editor.inner.contains(pos) {
+            return;
+        }
+        let (line, col) = self.editor_position_at(editor, pos);
+        self.current_buffer_mut().set_cursor_at(line, col);
+    }
+
+    fn editor_position_at(&self, editor: EditorHitbox, pos: Position) -> (usize, usize) {
+        let buf = self.current_buffer();
+        let row_in_editor = (pos.y - editor.inner.y) as usize;
+        let line = buf.scroll_row + row_in_editor;
+        let text_x = editor.inner.x + editor.gutter_width as u16 + 1;
+        let col = if pos.x >= text_x {
+            buf.scroll_col + (pos.x - text_x) as usize
+        } else {
+            0
+        };
+        (line, col)
+    }
+
+    /// Détecte un double-clic : même cellule qu'un clic gauche précédent, à
+    /// moins de 400ms d'écart. La détection reconnue consomme la mémorisation
+    /// pour qu'un 3ᵉ clic rapproché ne soit pas à son tour pris pour un
+    /// second double-clic.
+    fn register_click(&mut self, pos: Position) -> bool {
+        let now = Instant::now();
+        let is_double = self.last_click.is_some_and(|(t, x, y)| {
+            x == pos.x && y == pos.y && now.duration_since(t) < Duration::from_millis(400)
+        });
+        self.last_click = if is_double { None } else { Some((now, pos.x, pos.y)) };
+        is_double
+    }
+
+    fn handle_scroll(&mut self, delta: isize) {
+        match self.focus {
+            Focus::Editor => {
+                let buf = self.current_buffer_mut();
+                let max_row = buf.lines.len().saturating_sub(1) as isize;
+                buf.scroll_row = (buf.scroll_row as isize + delta).clamp(0, max_row) as usize;
+            }
+            Focus::Explorer => {
+                let n = self.explorer.entries.len();
+                if n > 0 {
+                    self.explorer.selected =
+                        (self.explorer.selected as isize + delta).clamp(0, n as isize - 1) as usize;
+                }
+            }
+            Focus::Outline => {
+                let n = self.current_outline().len();
+                if n > 0 {
+                    self.outline_selected =
+                        (self.outline_selected as isize + delta).clamp(0, n as isize - 1) as usize;
+                }
+            }
+        }
+    }
+
+    fn handle_file_dialog_mouse(&mut self, mouse: MouseEvent, pos: Position) {
+        let Some(hitbox) = self.hitboxes.file_dialog else {
+            return;
+        };
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                if hitbox.tree.inner.contains(pos) {
+                    let idx = hitbox.tree.offset + (pos.y - hitbox.tree.inner.y) as usize;
+                    if let Some(d) = self.file_dialog.as_mut() {
+                        d.editing_filename = false;
+                        if idx < d.browser.entries.len() {
+                            d.browser.selected = idx;
+                        }
+                    }
+                    self.activate_dialog_selection();
+                } else if hitbox.filename_area.is_some_and(|r| r.contains(pos)) {
+                    if let Some(d) = self.file_dialog.as_mut() {
+                        d.editing_filename = true;
+                    }
+                } else if !hitbox.area.contains(pos) {
+                    self.file_dialog = None;
+                }
+            }
+            MouseEventKind::ScrollUp => self.scroll_dialog(-3),
+            MouseEventKind::ScrollDown => self.scroll_dialog(3),
+            _ => {}
+        }
+    }
+
+    fn scroll_dialog(&mut self, delta: isize) {
+        if let Some(d) = self.file_dialog.as_mut() {
+            let n = d.browser.entries.len();
+            if n > 0 {
+                d.browser.selected =
+                    (d.browser.selected as isize + delta).clamp(0, n as isize - 1) as usize;
+            }
         }
     }
 }
