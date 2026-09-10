@@ -62,7 +62,8 @@ Une barre de menu façon logiciel de bureau, activable par **F10** :
 | Menu | Entrée | Raccourci direct | Action |
 |---|---|---|---|
 | Fichier | Nouveau | Ctrl+N | Crée un nouvel onglet vide (« sans titre ») |
-| Fichier | Ouvrir... | Ctrl+O | Ouvre une invite de saisie d'un chemin de fichier |
+| Fichier | Ouvrir... | Ctrl+O | Ouvre un dialogue de sélection d'un fichier dans l'arborescence |
+| Fichier | Ouvrir un dossier... | — | Ouvre un dialogue de sélection d'un dossier (navigation libre, y compris au-delà du dossier actuellement ouvert) et le fait devenir la nouvelle racine de l'explorateur |
 | Fichier | Enregistrer | Ctrl+S | Sauvegarde l'onglet actif sur son fichier |
 | Fichier | Enregistrer sous... | — | Ouvre une invite pour choisir un nouveau chemin ; le langage est redétecté selon la nouvelle extension |
 | Fichier | Fermer l'onglet | Ctrl+W | Ferme l'onglet actif |
@@ -93,6 +94,14 @@ valider, Échap ou F10 pour refermer sans agir.
   focus à l'éditeur.
 - Accès au panneau : **F2** (focus) ou **Ctrl+E**. Retour à l'éditeur :
   **Échap** ou **F3**.
+- **Fichier > Ouvrir un dossier...** ouvre un dialogue de sélection de
+  dossier, du même type que celui des dialogues « Ouvrir... » et
+  « Enregistrer sous... » : ↑/↓ pour naviguer, → pour déplier un
+  sous-dossier, ← pour replier ou remonter (y compris, une fois la racine
+  du dialogue repliée, au-delà de son point de départ, jusqu'à la racine du
+  système de fichiers), Entrée pour choisir le dossier ciblé. Ce dossier
+  devient alors la nouvelle racine de l'explorateur, qui est rendu visible
+  s'il ne l'était pas déjà.
 
 ### 3.3 Éditeur de texte et onglets
 
@@ -204,7 +213,7 @@ existe n'importe où dans l'arborescence.
 | F5 | Compiler le projet *(si un module de compilation a détecté le projet)* |
 | F6 | Configurer les JDK utilisés pour la compilation *(idem)* |
 | Ctrl+N | Nouveau fichier |
-| Ctrl+O | Ouvrir un fichier (invite de saisie du chemin) |
+| Ctrl+O | Ouvrir un fichier (dialogue de sélection) |
 | Ctrl+S | Enregistrer |
 | Ctrl+W | Fermer l'onglet actif |
 | Ctrl+Q | Quitter (avec confirmation si modifications non enregistrées) |
@@ -258,6 +267,8 @@ via `cargo test --test features` :
 
 - `edition.feature` — édition, sauvegarde, couper/coller
 - `menu.feature` — navigation et actions de la barre de menu
+- `ouverture_dossier.feature` — dialogue « Ouvrir un dossier... » et
+  reracinage de l'explorateur
 - `affichage.feature` — visibilité des panneaux
 - `coloration_syntaxique.feature` — détection du langage par extension
 - `structure.feature` — extraction des symboles du panneau Structure

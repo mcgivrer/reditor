@@ -129,6 +129,31 @@ impl Explorer {
         &self.entries[0].path
     }
 
+    /// Change la racine de l'explorateur et recharge l'arborescence depuis
+    /// ce nouveau dossier (perd les dossiers dépliés et la sélection
+    /// précédents, contrairement à `refresh`).
+    pub fn set_root(&mut self, root: PathBuf) {
+        *self = Explorer::new(root);
+    }
+
+    /// Remonte la racine au dossier parent du dossier actuellement affiché,
+    /// même au-delà de la racine initiale de l'explorateur (utilisé par le
+    /// dialogue « Ouvrir un dossier... » pour atteindre n'importe quel
+    /// répertoire). Sélectionne l'ancien dossier racine dans la nouvelle
+    /// arborescence pour conserver le contexte. Renvoie `false` si le
+    /// dossier actuel n'a pas de parent (racine du système de fichiers).
+    pub fn go_up(&mut self) -> bool {
+        let current_root = self.entries[0].path.clone();
+        let Some(parent) = current_root.parent().map(Path::to_path_buf) else {
+            return false;
+        };
+        self.set_root(parent);
+        if let Some(idx) = self.entries.iter().position(|e| e.path == current_root) {
+            self.selected = idx;
+        }
+        true
+    }
+
     /// Relit l'arborescence depuis le disque (fichier ajouté, modifié,
     /// renommé ou supprimé), en conservant autant que possible les dossiers
     /// dépliés et l'entrée sélectionnée.

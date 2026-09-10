@@ -34,6 +34,7 @@ Fonctionnalité: Rafraîchissement de l'explorateur
     Et j'appuie sur "Bas"
     Et j'appuie sur "Bas"
     Et j'appuie sur "Bas"
+    Et j'appuie sur "Bas"
     Et j'appuie sur "Entrée"
     Et je saisis le nom de fichier "cree.txt" dans le dialogue
     Et je confirme le dialogue de fichier

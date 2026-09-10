@@ -8,15 +8,19 @@ use crate::explorer::Explorer;
 pub enum DialogMode {
     Open,
     SaveAs,
+    OpenFolder,
 }
 
-/// Dialogue modal de sélection d'un fichier dans l'arborescence,
-/// utilisé pour « Ouvrir... » et « Enregistrer sous... ».
+/// Dialogue modal de sélection d'un fichier ou d'un dossier dans
+/// l'arborescence, utilisé pour « Ouvrir... », « Enregistrer sous... » et
+/// « Ouvrir un dossier... ».
 ///
-/// La navigation dans l'arbre réutilise directement [`Explorer`]. En mode
-/// [`DialogMode::SaveAs`], un champ de saisie additionnel (`filename`)
-/// permet de choisir/corriger le nom du fichier à écrire ; `Tab` bascule le
-/// focus clavier entre l'arborescence et ce champ.
+/// La navigation dans l'arbre réutilise directement [`Explorer`], y compris
+/// pour remonter au-delà de la racine de départ (voir [`Explorer::go_up`])
+/// en mode [`DialogMode::OpenFolder`]. En mode [`DialogMode::SaveAs`], un
+/// champ de saisie additionnel (`filename`) permet de choisir/corriger le
+/// nom du fichier à écrire ; `Tab` bascule le focus clavier entre
+/// l'arborescence et ce champ.
 #[derive(Debug)]
 pub struct FileDialog {
     pub mode: DialogMode,

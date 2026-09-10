@@ -169,6 +169,16 @@ imbriqués) simplifie grandement le rendu (une simple liste indentée) et la
 navigation (déplacement d'index), au prix d'un recalcul de plage O(n) lors
 du pliage — largement suffisant pour des arborescences de projet typiques.
 
+`set_root` remplace intégralement la racine (équivalent à reconstruire
+l'`Explorer` via `new`, mais en place, pour que `App` conserve la même
+instance) ; `go_up` s'en sert pour faire remonter la racine à son dossier
+parent — au-delà de la profondeur 0 initiale — en resélectionnant l'ancienne
+racine dans la nouvelle arborescence pour conserver le contexte visuel.
+C'est ce mécanisme qui permet au dialogue « Ouvrir un dossier... »
+(`DialogMode::OpenFolder` dans `dialog.rs`, géré par
+`App::confirm_open_folder`) d'atteindre n'importe quel dossier du système
+de fichiers, et pas seulement un sous-dossier de la racine déjà chargée.
+
 ### 4.5 `outline.rs` — Extraction de la structure
 
 `extract_outline(lines, language) -> Vec<OutlineItem>` distribue vers une
@@ -401,7 +411,7 @@ Chaque scénario dispose d'un dossier temporaire isolé (`tempfile::tempdir`),
 détruit à la fin du scénario, pour ne jamais interférer avec le dépôt du
 projet ni les autres scénarios. Exécution : `cargo test --test features`.
 
-État actuel : 7 fichiers `.feature`, 47 scénarios, 195 étapes, tous
+État actuel : 8 fichiers `.feature`, 50 scénarios, 229 étapes, tous
 passants.
 
 ## 9. Limitations connues et dette technique

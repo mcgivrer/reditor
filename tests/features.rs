@@ -165,6 +165,7 @@ fn then_dialog_shown(world: &mut ReditorWorld, mode_label: String) {
     let expected = match mode_label.as_str() {
         "Ouvrir" => DialogMode::Open,
         "Enregistrer sous" => DialogMode::SaveAs,
+        "Ouvrir un dossier" => DialogMode::OpenFolder,
         other => panic!("mode de dialogue inconnu : {other}"),
     };
     assert_eq!(dialog.mode, expected);
@@ -331,6 +332,26 @@ fn then_panel_visibility(world: &mut ReditorWorld, panel: String, state: String)
         "Structure" => assert_eq!(world.app.show_outline, visible),
         other => panic!("panneau inconnu : {other}"),
     }
+}
+
+// ---------------------------------------------------------------------
+// Ouverture d'un dossier (dialogue « Ouvrir un dossier... »)
+// ---------------------------------------------------------------------
+
+#[given(regex = r#"^un dossier "([^"]+)" existe$"#)]
+fn given_directory_exists(world: &mut ReditorWorld, name: String) {
+    fs::create_dir_all(world.path_for(&name)).expect("création du dossier de test");
+}
+
+#[then("le dossier racine de l'explorateur est le dossier parent du dossier de travail")]
+fn then_explorer_root_is_workdir_parent(world: &mut ReditorWorld) {
+    let expected = world
+        .workdir
+        .path()
+        .parent()
+        .expect("le dossier de travail temporaire n'a pas de parent")
+        .to_path_buf();
+    assert_eq!(world.app.explorer.root(), expected.as_path());
 }
 
 // ---------------------------------------------------------------------

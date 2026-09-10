@@ -266,6 +266,7 @@ fn draw_file_dialog(frame: &mut Frame, dialog: &FileDialog, screen: Rect) {
     let title = match dialog.mode {
         DialogMode::Open => " Ouvrir un fichier ",
         DialogMode::SaveAs => " Enregistrer sous ",
+        DialogMode::OpenFolder => " Ouvrir un dossier ",
     };
     let block = Block::default()
         .title(title)
@@ -352,6 +353,9 @@ fn draw_file_dialog(frame: &mut Frame, dialog: &FileDialog, screen: Rect) {
         DialogMode::Open => "↑↓ naviguer   →/Entrée ouvrir ou déplier   ← replier   Échap annuler",
         DialogMode::SaveAs => {
             "↑↓ naviguer   →/Entrée déplier/choisir   Tab nom de fichier   Échap annuler"
+        }
+        DialogMode::OpenFolder => {
+            "↑↓ naviguer   → déplier   ← replier/remonter   Entrée choisir ce dossier   Échap annuler"
         }
     };
     frame.render_widget(

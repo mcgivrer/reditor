@@ -34,6 +34,7 @@ Fonctionnalité: Barre de menu
     Et j'appuie sur "Bas"
     Et j'appuie sur "Bas"
     Et j'appuie sur "Bas"
+    Et j'appuie sur "Bas"
     Et j'appuie sur "Entrée"
     Alors une fenêtre de dialogue "Enregistrer sous" est affichée
     Quand je saisis le nom de fichier "demo.java" dans le dialogue

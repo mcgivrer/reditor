@@ -183,6 +183,13 @@ impl App {
                     String::new(),
                 ));
             }
+            Action::OpenFolder => {
+                self.file_dialog = Some(FileDialog::new(
+                    DialogMode::OpenFolder,
+                    self.explorer.root().to_path_buf(),
+                    String::new(),
+                ));
+            }
             Action::Save => self.save_current(),
             Action::SaveAs => {
                 let default_name = self
@@ -455,7 +462,12 @@ impl App {
             }
             KeyCode::Left | KeyCode::Char('h') if !editing_filename => {
                 if let Some(d) = self.file_dialog.as_mut() {
-                    d.browser.collapse_selected();
+                    let at_root = d.browser.selected == 0 && !d.browser.entries[0].expanded;
+                    if d.mode == DialogMode::OpenFolder && at_root {
+                        d.browser.go_up();
+                    } else {
+                        d.browser.collapse_selected();
+                    }
                 }
             }
             KeyCode::Right | KeyCode::Char('l') if !editing_filename => {
@@ -499,6 +511,10 @@ impl App {
                     dialog.filename = name.to_string();
                 }
             }
+            // Rien à faire : dans ce mode, seuls les dossiers se déplient/replient
+            // (traité plus haut) ; sélectionner un fichier n'a pas d'effet, la
+            // validation se fait via `confirm_open_folder`.
+            DialogMode::OpenFolder => {}
         }
     }
 
@@ -522,7 +538,27 @@ impl App {
             }
             return;
         }
+        if dialog.mode == DialogMode::OpenFolder {
+            self.confirm_open_folder();
+            return;
+        }
         self.activate_dialog_selection();
+    }
+
+    /// Valide le dossier actuellement ciblé dans le dialogue « Ouvrir un
+    /// dossier... » (voir `FileDialog::target_directory`) comme nouvelle
+    /// racine de l'explorateur.
+    fn confirm_open_folder(&mut self) {
+        let Some(dialog) = self.file_dialog.take() else {
+            return;
+        };
+        let folder = dialog.target_directory();
+        self.explorer.set_root(folder);
+        self.show_explorer = true;
+        self.compilable = compile::detect_module(self.explorer.root()).is_some();
+        self.menu = MenuBar::new(self.compilable);
+        self.status_message =
+            Some(format!("Dossier ouvert : {}", self.explorer.root().display()));
     }
 
     fn handle_compile_dialog_key(&mut self, key: KeyEvent) {
