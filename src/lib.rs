@@ -2,6 +2,7 @@ pub mod app;
 pub mod buffer;
 pub mod dialog;
 pub mod explorer;
+pub mod hitbox;
 pub mod menu;
 pub mod outline;
 pub mod syntax;

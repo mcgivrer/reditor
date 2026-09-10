@@ -7,11 +7,14 @@ use std::fs;
 use std::path::PathBuf;
 
 use cucumber::{given, then, when, World};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use ratatui::backend::TestBackend;
+use ratatui::Terminal;
 use tempfile::TempDir;
 
 use reditor::app::App;
 use reditor::dialog::DialogMode;
+use reditor::ui;
 
 #[derive(Debug, World)]
 #[world(init = Self::fresh)]
@@ -301,6 +304,90 @@ fn then_prompt_shown(world: &mut ReditorWorld, label: String) {
 #[then("aucune invite n'est affichée")]
 fn then_no_prompt(world: &mut ReditorWorld) {
     assert!(world.app.prompt.is_none());
+}
+
+// ---------------------------------------------------------------------
+// Souris
+// ---------------------------------------------------------------------
+
+/// Rend l'interface dans un backend de test pour que `world.app.hitboxes`
+/// reflète le layout courant, puis permet de traduire un nom d'entrée ou un
+/// titre de menu en coordonnées d'écran avant de simuler un clic.
+fn render(world: &mut ReditorWorld) {
+    let backend = TestBackend::new(120, 30);
+    let mut terminal = Terminal::new(backend).expect("terminal de test");
+    terminal
+        .draw(|f| ui::draw(f, &mut world.app))
+        .expect("rendu de test");
+}
+
+fn click_at(world: &mut ReditorWorld, column: u16, row: u16) {
+    world.app.handle_mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    });
+}
+
+#[when(regex = r#"^je clique sur le menu "([^"]+)"$"#)]
+fn when_click_menu_title(world: &mut ReditorWorld, title: String) {
+    render(world);
+    let idx = world
+        .app
+        .menu
+        .menus
+        .iter()
+        .position(|m| m.title == title)
+        .expect("menu inconnu");
+    let rect = world.app.hitboxes.menu_titles[idx];
+    click_at(world, rect.x, rect.y);
+}
+
+#[when(regex = r#"^je clique sur l'entrée "([^"]+)" dans l'explorateur$"#)]
+fn when_click_explorer_entry(world: &mut ReditorWorld, name: String) {
+    render(world);
+    let idx = world
+        .app
+        .explorer
+        .entries
+        .iter()
+        .position(|e| e.path.file_name().and_then(|n| n.to_str()) == Some(name.as_str()))
+        .expect("entrée introuvable dans l'explorateur");
+    let panel = world.app.hitboxes.explorer.expect("explorateur non affiché");
+    let row = panel.inner.y + (idx - panel.offset) as u16;
+    click_at(world, panel.inner.x, row);
+}
+
+/// `from_col`/`to_col` sont des colonnes de caractères 0-indexées, dans le
+/// même repère que `Buffer::cursor_col`.
+#[when(
+    regex = r#"^je sélectionne à la souris de la colonne (\d+) à la colonne (\d+) sur la ligne (\d+) de l'éditeur$"#
+)]
+fn when_mouse_select_range(
+    world: &mut ReditorWorld,
+    from_col: usize,
+    to_col: usize,
+    line: usize,
+) {
+    render(world);
+    let editor = world.app.hitboxes.editor.expect("éditeur non affiché");
+    let scroll_row = world.app.current_buffer().scroll_row;
+    let row = editor.inner.y + (line - 1).saturating_sub(scroll_row) as u16;
+    let text_x = editor.inner.x + editor.gutter_width as u16 + 1;
+
+    world.app.handle_mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: text_x + from_col as u16,
+        row,
+        modifiers: KeyModifiers::NONE,
+    });
+    world.app.handle_mouse(MouseEvent {
+        kind: MouseEventKind::Drag(MouseButton::Left),
+        column: text_x + to_col as u16,
+        row,
+        modifiers: KeyModifiers::NONE,
+    });
 }
 
 // ---------------------------------------------------------------------
